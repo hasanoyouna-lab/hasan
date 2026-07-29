@@ -124,6 +124,13 @@ function renderOpenBreak(emp, log) {
   const timerEl = document.getElementById("timerEl");
   function tick() {
     const elapsedMs = Date.now() - outAt;
+    if (elapsedMs < 0) {
+      // لسا ما بلش الاحتساب الرسمي (أول دقيقة بعد الضغط) — نعرض عد تنازلي واضح بدل رقم سالب مربك
+      const remainingSec = Math.ceil(-elapsedMs / 1000);
+      timerEl.textContent = `يبلش الاحتساب خلال 00:${String(remainingSec).padStart(2, "0")}`;
+      timerEl.classList.remove("over");
+      return;
+    }
     const mins = Math.floor(elapsedMs / 60000);
     const secs = Math.floor((elapsedMs % 60000) / 1000);
     timerEl.textContent = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
