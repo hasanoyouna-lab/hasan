@@ -121,7 +121,7 @@ function updateGauges() {
     const st = statusMap[emp.id];
     if (elapsedEl && st && st.openLog) {
       const elapsedMs = Date.now() - new Date(st.openLog.outAt).getTime();
-      elapsedEl.textContent = `بالخارج منذ ${fmtElapsedHuman(elapsedMs)} — ${st.openLog.reason}`;
+      elapsedEl.textContent = `بريك من ${fmtElapsedHuman(elapsedMs)} — ${st.openLog.reason}`;
     }
   });
 }
