@@ -22,7 +22,7 @@ var SHEET_HEADERS = {
   Settings: ['key', 'value', 'updatedAt']
 };
 
-var DEFAULT_REASONS = 'حمام,صلاة,أكل,خارج المطعم,استراحة';
+var DEFAULT_REASONS = 'حمام,صلاة,أكل,الذهاب للخارج,استراحة';
 
 /**
  * شغّل هاي الدالة مرة وحدة بس (▶ Run فوق، اختارها من القائمة، وافق على الصلاحيات).
