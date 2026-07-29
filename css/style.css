@@ -60,6 +60,11 @@ html, body {
   font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
+.header .date {
+  margin-top: 2px;
+  color: #B9C7E0;
+  font-size: 13px;
+}
 
 .container {
   max-width: 900px;

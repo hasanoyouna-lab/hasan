@@ -8,9 +8,16 @@ let gaugeInterval = null;
 let statusPollInterval = null;
 
 function fmtClock(d) {
-  return d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  return d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
 }
-setInterval(() => { document.getElementById("clock").textContent = fmtClock(new Date()); }, 1000);
+function fmtDateLine(d) {
+  return d.toLocaleDateString("ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+}
+setInterval(() => {
+  const now = new Date();
+  document.getElementById("clock").textContent = fmtClock(now);
+  document.getElementById("dateLine").textContent = fmtDateLine(now);
+}, 1000);
 
 function updateOfflineBanner() {
   const banner = document.getElementById("offlineBanner");

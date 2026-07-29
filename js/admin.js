@@ -3,7 +3,7 @@ const AUTH_KEY = "mt_admin_ok";
 
 function fmtTime(iso) {
   if (!iso) return "-";
-  return new Date(iso).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return new Date(iso).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 function fmtDuration(mins) {
   if (mins === "" || mins === null || mins === undefined) return "-";
