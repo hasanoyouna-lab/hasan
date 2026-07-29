@@ -192,7 +192,7 @@ function renderOpenBreak(emp, log) {
   app.innerHTML = `
     <span class="back-link" onclick="loadHome()">‹ رجوع</span>
     <h2 class="center">${emp.name}</h2>
-    <p class="center muted">بريك مفتوح — السبب: ${log.reason}</p>
+    <p class="center muted">بريك — السبب: ${log.reason}</p>
     <div class="timer" id="timerEl">00:00</div>
     <div class="center"><button class="btn danger" id="endBtn">تسجيل العودة</button></div>
   `;
