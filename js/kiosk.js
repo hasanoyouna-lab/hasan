@@ -74,6 +74,15 @@ async function loadHome() {
   }, 15000);
 }
 
+function fmtElapsedHuman(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  if (totalSec < 60) return `${totalSec} ثانية`;
+  const mins = Math.floor(totalSec / 60);
+  if (mins === 1) return `دقيقة وحدة`;
+  if (mins === 2) return `دقيقتين`;
+  return `${mins} دقايق`;
+}
+
 function gaugeColor(pct) {
   const p = Math.max(0, Math.min(1, pct));
   const hue = 120 - 120 * p; // 120=أخضر → 0=أحمر
@@ -96,12 +105,19 @@ function updateGauges() {
   employees.forEach(emp => {
     const fill = document.getElementById("gauge-" + emp.id);
     const label = document.getElementById("gauge-label-" + emp.id);
+    const elapsedEl = document.getElementById("elapsed-" + emp.id);
     if (!fill) return;
     const used = employeeUsedMinutes(emp);
     const pct = used / dailyLimit;
     fill.style.width = Math.min(100, pct * 100) + "%";
     fill.style.backgroundColor = gaugeColor(pct);
     if (label) label.textContent = `${Math.round(used)} / ${dailyLimit} د`;
+
+    const st = statusMap[emp.id];
+    if (elapsedEl && st && st.openLog) {
+      const elapsedMs = Date.now() - new Date(st.openLog.outAt).getTime();
+      elapsedEl.textContent = `برا من ${fmtElapsedHuman(elapsedMs)} — ${st.openLog.reason}`;
+    }
   });
 }
 
@@ -117,7 +133,8 @@ function renderHome() {
     const tile = document.createElement("div");
     tile.className = "tile" + (isOut ? " open-break" : "");
     tile.innerHTML = `
-      <div>${emp.name}${isOut ? ` <span class="sub">برا — ${st.openLog.reason}</span>` : ""}</div>
+      <div>${emp.name}</div>
+      ${isOut ? `<div class="sub" id="elapsed-${emp.id}"></div>` : ""}
       <div class="gauge-wrap"><div class="gauge-fill" id="gauge-${emp.id}" style="width:0%;"></div></div>
       <div class="gauge-label" id="gauge-label-${emp.id}"></div>
     `;
