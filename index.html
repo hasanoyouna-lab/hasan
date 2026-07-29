@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>تسجيل ومتابعة موظفين عبداللطيف جميل</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#163B73" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -24,5 +26,10 @@
   <script src="js/api.js"></script>
   <script src="js/offline.js"></script>
   <script src="js/kiosk.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js");
+    }
+  </script>
 </body>
 </html>
