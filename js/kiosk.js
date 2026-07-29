@@ -203,7 +203,7 @@ function renderOpenBreak(emp, log) {
     if (elapsedMs < 0) {
       // لسا ما بلش الاحتساب الرسمي (أول دقيقة بعد الضغط) — نعرض عد تنازلي واضح بدل رقم سالب مربك
       const remainingSec = Math.ceil(-elapsedMs / 1000);
-      timerEl.textContent = `يبلش الاحتساب خلال 00:${String(remainingSec).padStart(2, "0")}`;
+      timerEl.textContent = `يبدأ الاحتساب خلال 00:${String(remainingSec).padStart(2, "0")}`;
       timerEl.classList.remove("over");
       return;
     }
