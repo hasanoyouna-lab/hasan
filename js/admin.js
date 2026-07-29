@@ -49,6 +49,7 @@ function renderLogin() {
 async function renderDashboard() {
   app.innerHTML = `
     <div class="row" style="margin-bottom:16px;">
+      <button class="btn secondary" data-tab="now">مين برا الآن</button>
       <button class="btn secondary" data-tab="report">التقرير</button>
       <button class="btn secondary" data-tab="employees">الموظفين</button>
       <button class="btn secondary" data-tab="settings">الإعدادات</button>
@@ -57,15 +58,51 @@ async function renderDashboard() {
     <div id="tabBody"></div>
   `;
   app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => loadTab(b.dataset.tab));
-  loadTab("report");
+  loadTab("now");
 }
 
+let nowRefreshTimer = null;
 async function loadTab(tab) {
+  if (nowRefreshTimer) { clearInterval(nowRefreshTimer); nowRefreshTimer = null; }
   const body = document.getElementById("tabBody");
   body.innerHTML = `<p class="muted center">جاري التحميل...</p>`;
+  if (tab === "now") return renderNow(body);
   if (tab === "report") return renderReport(body);
   if (tab === "employees") return renderEmployees(body);
   if (tab === "settings") return renderSettings(body);
+}
+
+// ==================== مين برا الآن ====================
+async function renderNow(body) {
+  try {
+    const [openLogs, settings] = await Promise.all([Api.get("getOpenLogs"), Api.get("getSettings")]);
+    const maxMinutes = Number(settings.maxBreakMinutes) || 30;
+    if (!openLogs.length) {
+      body.innerHTML = `<div class="panel center muted">ما في حدا برا هلق — الكل موجود ✅</div>`;
+    } else {
+      const rows = openLogs.map(l => {
+        const elapsed = Math.floor((Date.now() - new Date(l.outAt).getTime()) / 60000);
+        const cls = elapsed >= maxMinutes ? "overlimit" : "open";
+        return `<tr class="${cls}">
+          <td>${l.employeeName}</td>
+          <td>${l.reason}</td>
+          <td>${fmtTime(l.outAt)}</td>
+          <td>${elapsed >= 0 ? elapsed + " د" : "-"}</td>
+        </tr>`;
+      }).join("");
+      body.innerHTML = `
+        <div class="panel">
+          <table>
+            <thead><tr><th>الموظف</th><th>السبب</th><th>خرج الساعة</th><th>المدة الحالية</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+    nowRefreshTimer = setInterval(() => renderNow(body), 10000);
+  } catch (e) {
+    body.innerHTML = `<p class="center muted">خطأ: ${e.message}</p>`;
+  }
 }
 
 // ==================== التقرير ====================

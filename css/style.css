@@ -48,6 +48,7 @@ html, body {
   background: linear-gradient(180deg, var(--primary), var(--primary-dark));
   color: #fff;
   border-bottom: 3px solid var(--accent);
+  box-shadow: 0 6px 16px rgba(14,40,80,.25);
 }
 .header h1 {
   margin: 0;
@@ -73,23 +74,24 @@ html, body {
 }
 
 .tile {
-  background: var(--surface);
+  background: linear-gradient(160deg, #ffffff, #F6F9FF);
   border: 1px solid var(--surface2);
   border-right: 4px solid var(--primary);
   border-radius: var(--radius);
-  padding: 22px 10px;
+  padding: 22px 14px;
   text-align: center;
   font-size: 18px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(22,59,115,.08);
-  transition: transform .08s ease, background .15s ease;
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 8px 18px rgba(22,59,115,.10), 0 2px 4px rgba(22,59,115,.06);
+  transition: transform .12s ease, box-shadow .12s ease;
   user-select: none;
 }
-.tile:active { transform: scale(0.96); }
+.tile:hover { transform: translateY(-2px); box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 12px 22px rgba(22,59,115,.14), 0 3px 6px rgba(22,59,115,.08); }
+.tile:active { transform: scale(0.97) translateY(0); }
 .tile.open-break {
   border-right-color: var(--danger);
-  background: #FDEEEF;
+  background: linear-gradient(160deg, #FEF3F3, #FCE4E5);
 }
 .tile .sub {
   display: block;
@@ -127,7 +129,7 @@ html, body {
   margin: 20px 0;
 }
 .reason-btn {
-  background: var(--surface);
+  background: linear-gradient(160deg, #ffffff, #F6F9FF);
   border: 1px solid var(--surface2);
   border-top: 4px solid var(--accent);
   border-radius: var(--radius);
@@ -136,8 +138,10 @@ html, body {
   font-size: 17px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(22,59,115,.08);
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 8px 18px rgba(22,59,115,.10), 0 2px 4px rgba(22,59,115,.06);
+  transition: transform .12s ease, box-shadow .12s ease;
 }
+.reason-btn:hover { transform: translateY(-2px); }
 .reason-btn:active { transform: scale(0.96); }
 
 .panel {
@@ -220,6 +224,27 @@ input, select {
 
 .center { text-align: center; }
 .muted { color: var(--muted); }
+
+.gauge-wrap {
+  margin-top: 10px;
+  height: 10px;
+  background: var(--surface2);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(22,59,115,.15);
+}
+.gauge-fill {
+  height: 100%;
+  border-radius: 999px;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,0) 55%);
+  background-blend-mode: overlay;
+  transition: width .4s ease, background-color .4s ease;
+}
+.gauge-label {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
 
 .offline-banner {
   background: #FFF3CD;

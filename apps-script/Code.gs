@@ -46,7 +46,15 @@ function setupEverything() {
   }
 
   seedInitialDataIfEmpty();
+  ensureDefaultSetting('dailyLimitMinutes', 60);
   return 'تم إعداد كل التبويبات بنجاح';
+}
+
+// يضيف إعداد افتراضي بس إذا كان مش موجود أصلاً (ما بيلمس قيمة موجودة سابقاً حتى لو تغيّرت يدوياً)
+function ensureDefaultSetting(key, defaultValue) {
+  var r = readRows(SHEET_NAMES.SETTINGS);
+  var exists = r.rows.some(function (row) { return row.key === key; });
+  if (!exists) appendRow(SHEET_NAMES.SETTINGS, { key: key, value: defaultValue, updatedAt: nowIso() });
 }
 
 function seedInitialDataIfEmpty() {
@@ -64,6 +72,7 @@ function seedInitialDataIfEmpty() {
     var now2 = nowIso();
     var settings = [
       ['maxBreakMinutes', 30, now2],
+      ['dailyLimitMinutes', 60, now2],
       ['adminPassword', '1234', now2],
       ['reasons', DEFAULT_REASONS, now2]
     ];
@@ -78,8 +87,11 @@ function doGet(e) {
     switch (action) {
       case 'getEmployees': data = getEmployees(e.parameter.all === '1'); break;
       case 'getOpenLog': data = getOpenLog(e.parameter.employeeId); break;
+      case 'getOpenLogs': data = getOpenLogs(); break;
+      case 'getStatus': data = getStatus(); break;
       case 'getReport': data = getReport(e.parameter.start, e.parameter.end); break;
       case 'getSettings': data = getSettings(); break;
+      case 'runSetup': data = setupEverything(); break;
       default: throw new Error('unknown action: ' + action);
     }
     return jsonOut({ ok: true, data: data });
@@ -210,6 +222,32 @@ function getOpenLog(employeeId) {
   var rows = readRows(SHEET_NAMES.LOGS).rows;
   var open = rows.filter(function (r) { return r.employeeId === employeeId && r.status === 'open'; });
   return open.length ? open[open.length - 1] : null;
+}
+
+// كل الموظفين البرا حاليًا (بريك مفتوح)، تستخدم للوحة "مين برا الآن"
+function getOpenLogs() {
+  var rows = readRows(SHEET_NAMES.LOGS).rows;
+  return rows.filter(function (r) { return r.status === 'open'; })
+    .sort(function (a, b) { return a.outAt < b.outAt ? -1 : 1; });
+}
+
+// إجمالي دقائق البريكات المستخدمة اليوم لكل موظف (كل البريكات المقفولة + البريك المفتوح
+// الحالي إذا في)، يستخدم لميزان الحرارة بالواجهة (أخضر ← أحمر حسب الحد اليومي dailyLimitMinutes).
+function getStatus() {
+  var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var rows = readRows(SHEET_NAMES.LOGS).rows;
+  var byEmployee = {};
+  rows.forEach(function (r) {
+    var day = r.outAt ? String(r.outAt).slice(0, 10) : '';
+    if (day !== todayStr) return;
+    if (!byEmployee[r.employeeId]) byEmployee[r.employeeId] = { closedMinutes: 0, openLog: null };
+    if (r.status === 'closed') {
+      byEmployee[r.employeeId].closedMinutes += Number(r.durationMin) || 0;
+    } else if (r.status === 'open') {
+      byEmployee[r.employeeId].openLog = { id: r.id, reason: r.reason, outAt: r.outAt };
+    }
+  });
+  return byEmployee;
 }
 
 var BREAK_START_DELAY_SEC = 45;

@@ -1,8 +1,11 @@
 const app = document.getElementById("app");
 let employees = [];
 let settings = {};
+let statusMap = {};
 let selectedEmployee = null;
 let timerInterval = null;
+let gaugeInterval = null;
+let statusPollInterval = null;
 
 function fmtClock(d) {
   return d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -39,9 +42,15 @@ function fmtDuration(mins) {
   return h > 0 ? `${h} س ${m} د` : `${m} د`;
 }
 
+function stopHomePolling() {
+  if (gaugeInterval) { clearInterval(gaugeInterval); gaugeInterval = null; }
+  if (statusPollInterval) { clearInterval(statusPollInterval); statusPollInterval = null; }
+}
+
 async function loadHome() {
   selectedEmployee = null;
   if (timerInterval) clearInterval(timerInterval);
+  stopHomePolling();
   app.innerHTML = `<p class="center muted">جاري التحميل...</p>`;
   try {
     [employees, settings] = await Promise.all([Api.get("getEmployees"), Api.get("getSettings")]);
@@ -55,8 +64,45 @@ async function loadHome() {
       return;
     }
   }
+  try { statusMap = await Api.get("getStatus"); } catch (e) { statusMap = {}; }
   renderHome();
   updateOfflineBanner();
+
+  gaugeInterval = setInterval(updateGauges, 1000);
+  statusPollInterval = setInterval(async () => {
+    try { statusMap = await Api.get("getStatus"); updateGauges(); } catch (e) { /* يتجاهل، بيحاول تاني بعد شوي */ }
+  }, 15000);
+}
+
+function gaugeColor(pct) {
+  const p = Math.max(0, Math.min(1, pct));
+  const hue = 120 - 120 * p; // 120=أخضر → 0=أحمر
+  return `hsl(${hue}, 70%, 45%)`;
+}
+
+function employeeUsedMinutes(emp) {
+  const st = statusMap[emp.id];
+  if (!st) return 0;
+  let mins = Number(st.closedMinutes) || 0;
+  if (st.openLog) {
+    const elapsed = (Date.now() - new Date(st.openLog.outAt).getTime()) / 60000;
+    mins += Math.max(0, elapsed);
+  }
+  return mins;
+}
+
+function updateGauges() {
+  const dailyLimit = Number(settings.dailyLimitMinutes) || 60;
+  employees.forEach(emp => {
+    const fill = document.getElementById("gauge-" + emp.id);
+    const label = document.getElementById("gauge-label-" + emp.id);
+    if (!fill) return;
+    const used = employeeUsedMinutes(emp);
+    const pct = used / dailyLimit;
+    fill.style.width = Math.min(100, pct * 100) + "%";
+    fill.style.backgroundColor = gaugeColor(pct);
+    if (label) label.textContent = `${Math.round(used)} / ${dailyLimit} د`;
+  });
 }
 
 function renderHome() {
@@ -66,16 +112,24 @@ function renderHome() {
   `;
   const grid = document.getElementById("empGrid");
   employees.forEach(emp => {
+    const st = statusMap[emp.id];
+    const isOut = !!(st && st.openLog);
     const tile = document.createElement("div");
-    tile.className = "tile";
-    tile.textContent = emp.name;
+    tile.className = "tile" + (isOut ? " open-break" : "");
+    tile.innerHTML = `
+      <div>${emp.name}${isOut ? ` <span class="sub">برا — ${st.openLog.reason}</span>` : ""}</div>
+      <div class="gauge-wrap"><div class="gauge-fill" id="gauge-${emp.id}" style="width:0%;"></div></div>
+      <div class="gauge-label" id="gauge-label-${emp.id}"></div>
+    `;
     tile.onclick = () => openEmployee(emp);
     grid.appendChild(tile);
   });
+  updateGauges();
 }
 
 async function openEmployee(emp) {
   selectedEmployee = emp;
+  stopHomePolling();
   app.innerHTML = `<p class="center muted">جاري التحقق...</p>`;
   const openLog = await Local.getOpenBreak(emp.id, emp.name);
   if (openLog) renderOpenBreak(emp, openLog);
@@ -85,7 +139,7 @@ async function openEmployee(emp) {
 function renderReasonPicker(emp) {
   const reasons = (settings.reasons || "حمام,صلاة,أكل,خارج المطعم,استراحة").split(",").map(s => s.trim()).filter(Boolean);
   app.innerHTML = `
-    <span class="back-link" onclick="renderHome()">‹ رجوع</span>
+    <span class="back-link" onclick="loadHome()">‹ رجوع</span>
     <h2 class="center">${emp.name}</h2>
     <p class="center muted">وين رايح؟</p>
     <div class="reason-grid" id="reasonGrid"></div>
@@ -114,7 +168,7 @@ async function startBreak(emp, reason) {
 function renderOpenBreak(emp, log) {
   const maxMinutes = Number(settings.maxBreakMinutes) || 30;
   app.innerHTML = `
-    <span class="back-link" onclick="renderHome()">‹ رجوع</span>
+    <span class="back-link" onclick="loadHome()">‹ رجوع</span>
     <h2 class="center">${emp.name}</h2>
     <p class="center muted">بريك مفتوح — السبب: ${log.reason}</p>
     <div class="timer" id="timerEl">00:00</div>
