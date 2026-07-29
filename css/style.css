@@ -53,6 +53,17 @@ html, body {
   box-shadow: 0 6px 16px rgba(0,0,0,.15);
   position: relative;
 }
+.branch-label {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  font-size: 13px;
+  font-weight: 800;
+  background: #000;
+  color: var(--yellow);
+  padding: 8px 12px;
+  border-radius: 10px;
+}
 .header-row {
   display: flex;
   align-items: center;
@@ -64,19 +75,14 @@ html, body {
   height: 96px;
   object-fit: contain;
   flex-shrink: 0;
+  mix-blend-mode: multiply;
 }
-.header-titles { text-align: center; }
 .header h1 {
   margin: 0;
   font-size: 22px;
   font-weight: 900;
   letter-spacing: .3px;
   text-transform: uppercase;
-}
-.branch-sub {
-  margin-top: 4px;
-  font-size: 15px;
-  font-weight: 700;
 }
 .header .clock {
   margin-top: 8px;
