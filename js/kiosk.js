@@ -83,11 +83,9 @@ async function loadHome() {
 
 function fmtElapsedHuman(ms) {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
-  if (totalSec < 60) return `${totalSec} ثانية`;
   const mins = Math.floor(totalSec / 60);
-  if (mins === 1) return `دقيقة وحدة`;
-  if (mins === 2) return `دقيقتين`;
-  return `${mins} دقايق`;
+  const secs = totalSec % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
 function gaugeColor(pct) {
@@ -123,7 +121,7 @@ function updateGauges() {
     const st = statusMap[emp.id];
     if (elapsedEl && st && st.openLog) {
       const elapsedMs = Date.now() - new Date(st.openLog.outAt).getTime();
-      elapsedEl.textContent = `برا من ${fmtElapsedHuman(elapsedMs)} — ${st.openLog.reason}`;
+      elapsedEl.textContent = `بالخارج منذ ${fmtElapsedHuman(elapsedMs)} — ${st.openLog.reason}`;
     }
   });
 }
