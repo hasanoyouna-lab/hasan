@@ -212,11 +212,13 @@ function getOpenLog(employeeId) {
   return open.length ? open[open.length - 1] : null;
 }
 
-function addMinutesIso(iso, mins) {
-  return new Date(new Date(iso).getTime() + mins * 60000).toISOString();
+var BREAK_START_DELAY_SEC = 30;
+
+function addSecondsIso(iso, secs) {
+  return new Date(new Date(iso).getTime() + secs * 1000).toISOString();
 }
 
-// وقت الخروج المسجل يبلش بعد دقيقة كاملة من لحظة الضغط (قرار متفق عليه) —
+// وقت الخروج المسجل يبلش بعد BREAK_START_DELAY_SEC ثانية من لحظة الضغط (قرار متفق عليه) —
 // clientOutAt بيوصل بس لما التسجيل صار أصلاً بجهاز أوفلاين وقت الضغط (فيه ساعة الجهاز، مو السيرفر).
 function startBreak(p) {
   var existing = getOpenLog(p.employeeId);
@@ -225,7 +227,7 @@ function startBreak(p) {
 
   var id = p.id || Utilities.getUuid();
   var now = nowIso();
-  var outAt = p.clientOutAt ? p.clientOutAt : addMinutesIso(now, 1);
+  var outAt = p.clientOutAt ? p.clientOutAt : addSecondsIso(now, BREAK_START_DELAY_SEC);
   var outOffline = !!p.clientOutAt;
   appendRow(SHEET_NAMES.LOGS, {
     id: id, employeeId: p.employeeId, employeeName: p.employeeName, reason: p.reason,
