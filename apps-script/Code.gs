@@ -212,7 +212,7 @@ function getOpenLog(employeeId) {
   return open.length ? open[open.length - 1] : null;
 }
 
-var BREAK_START_DELAY_SEC = 30;
+var BREAK_START_DELAY_SEC = 45;
 
 function addSecondsIso(iso, secs) {
   return new Date(new Date(iso).getTime() + secs * 1000).toISOString();

@@ -27,7 +27,7 @@ const Local = (() => {
   // يرجع {id, outAt, offline} فورًا (تفاؤلي)، ويحاول المزامنة الفعلية بالخلفية.
   async function startBreak(employeeId, employeeName, reason) {
     const id = newId();
-    const localOutAt = new Date(Date.now() + 30000).toISOString(); // +30 ثانية، للاستخدام لو صار أوفلاين
+    const localOutAt = new Date(Date.now() + 45000).toISOString(); // +45 ثانية، للاستخدام لو صار أوفلاين
 
     const breaks = getBreaks();
     breaks[id] = { employeeId, employeeName, reason, outAt: localOutAt, inAt: null, needsSync: { start: true, end: false } };
