@@ -116,10 +116,19 @@ html, body {
   animation: pulse 1.6s ease-in-out infinite;
 }
 .out-chip {
+  display: inline-flex; align-items: center; gap: 7px;
   background: #FFECEC; border: 1.5px solid var(--danger);
-  border-radius: 999px; padding: 4px 12px;
+  border-radius: 999px; padding: 5px 13px;
   font-weight: 700; font-size: 14px;
-  font-variant-numeric: tabular-nums;
+}
+.out-chip .icon { width: 16px; height: 16px; color: var(--danger-deep); flex-shrink: 0; }
+.out-chip .chip-reason {
+  color: var(--danger-deep); font-weight: 600;
+  padding-inline-start: 7px; border-inline-start: 1.5px solid rgba(214,47,47,.35);
+}
+.out-chip .chip-time {
+  font-variant-numeric: tabular-nums; font-weight: 800;
+  padding-inline-start: 7px; border-inline-start: 1.5px solid rgba(214,47,47,.35);
 }
 
 /* ===================== بطاقات الموظفين ===================== */

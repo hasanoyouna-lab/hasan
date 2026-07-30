@@ -200,7 +200,16 @@ function renderHome() {
 function outStripHtml() {
   const chips = employees
     .filter(e => statusMap[e.id] && statusMap[e.id].openLog)
-    .map(e => `<span class="out-chip" data-chip="${e.id}">${escapeHtml(e.name)}</span>`)
+    .map(e => {
+      const log = statusMap[e.id].openLog;
+      // الوقت جوا span لحاله عشان التحديث كل ثانية ما يمسح الأيقونة والسبب
+      return `<span class="out-chip">
+        ${Icons.svg(log.reason, 16)}
+        <b>${escapeHtml(e.name)}</b>
+        <span class="chip-reason">${escapeHtml(log.reason)}</span>
+        <span class="chip-time" data-chip="${e.id}"></span>
+      </span>`;
+    })
     .join("");
   return `<div class="out-strip"><span class="lbl"><span class="live-dot"></span>برا الآن</span>${chips}</div>`;
 }
@@ -240,7 +249,7 @@ function paintLive() {
     const chip = document.querySelector(`[data-chip="${emp.id}"]`);
     if (chip && open) {
       const elapsed = Date.now() - new Date(open.outAt).getTime();
-      chip.textContent = `${emp.name} · ${elapsed < 0 ? "الآن" : mmss(elapsed)}`;
+      chip.textContent = elapsed < 0 ? `سماح ${mmss(-elapsed)}` : mmss(elapsed);
     }
   });
 
