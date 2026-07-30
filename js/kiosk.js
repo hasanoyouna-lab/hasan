@@ -265,11 +265,12 @@ function paintLive() {
 }
 
 // ===================== ملخص يوم الموظف =====================
-function timesWord(n) {
-  if (n === 1) return "مرة";
+// صياغة عربية سليمة: "مرة وحدة" و"مرتين" بدون رقم، والجمع بالرقم
+function timesPhrase(n) {
+  if (n === 1) return "مرة وحدة";
   if (n === 2) return "مرتين";
-  if (n >= 3 && n <= 10) return "مرات";
-  return "مرة";
+  if (n <= 10) return `${n} مرات`;
+  return `${n} مرة`;
 }
 
 // "وين قضى وقته اليوم" — مرتّب من الأطول للأقصر
@@ -289,7 +290,7 @@ function daySummaryHtml(empId) {
   const rows = entries.map(([reason, v]) => `
     <div class="sum-row">
       <span class="sum-name">${Icons.svg(reason, 18)}<span>${escapeHtml(reason)}</span></span>
-      <span class="sum-count">${v.count} ${timesWord(v.count)}</span>
+      <span class="sum-count">${timesPhrase(v.count)}</span>
       <span class="sum-mins">${Math.round(v.mins)} د</span>
     </div>`).join("");
 
