@@ -5,6 +5,7 @@ const Local = (() => {
   const BREAKS_KEY = "att_local_breaks"; // { [id]: {employeeId, employeeName, reason, outAt, inAt, needsSync:{start,end}} }
   const QUEUE_KEY = "att_queue"; // [{ id, type: 'start'|'end' }]
   const CACHE_KEY = "att_cache"; // { employees, settings }
+  const STATUS_KEY = "att_status_cache"; // { day, map } — آخر حالة يومية معروفة من السيرفر
 
   function readJson(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch (e) { return fallback; }
@@ -18,6 +19,18 @@ const Local = (() => {
 
   function cacheSet(employees, settings) { writeJson(CACHE_KEY, { employees, settings }); }
   function cacheGet() { return readJson(CACHE_KEY, null); }
+
+  function localDayKey(d) {
+    d = d || new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  // نخزّن آخر حالة يومية جات من السيرفر، عشان لو فتح الموقع بدون نت يضل العداد اليومي
+  // مبني على أرقام حقيقية مش صفر. بنرميها لو صارت من يوم قديم حتى ما نعرض أرقام مبارح.
+  function statusCacheSet(map) { writeJson(STATUS_KEY, { day: localDayKey(), map: map }); }
+  function statusCacheGet() {
+    const c = readJson(STATUS_KEY, null);
+    return c && c.day === localDayKey() ? c.map : null;
+  }
 
   function newId() {
     return (crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
@@ -99,6 +112,17 @@ const Local = (() => {
     }
   }
 
+  // كل البريكات المفتوحة المخزّنة محليًا (تُستخدم لعرض العداد وحالة "برا" حتى بدون نت،
+  // وحتى لو ما نجحت المزامنة بعد). key = employeeId
+  function getAllLocalOpenBreaks() {
+    const breaks = getBreaks();
+    const out = {};
+    Object.values(breaks).forEach(r => {
+      if (!r.inAt) out[r.employeeId] = { reason: r.reason, outAt: r.outAt };
+    });
+    return out;
+  }
+
   // ==================== المزامنة ====================
   let flushing = false;
   async function flushQueue() {
@@ -148,5 +172,9 @@ const Local = (() => {
   window.addEventListener("online", flushQueue);
   setInterval(flushQueue, 20000);
 
-  return { startBreak, endBreak, getOpenBreak, cacheSet, cacheGet, flushQueue, pendingCount };
+  return {
+    startBreak, endBreak, getOpenBreak, getAllLocalOpenBreaks,
+    cacheSet, cacheGet, statusCacheSet, statusCacheGet,
+    flushQueue, pendingCount
+  };
 })();

@@ -19,22 +19,8 @@ setInterval(() => {
   document.getElementById("dateLine").textContent = fmtDateLine(now);
 }, 1000);
 
-function updateOfflineBanner() {
-  const banner = document.getElementById("offlineBanner");
-  const pending = Local.pendingCount();
-  if (!navigator.onLine) {
-    banner.style.display = "block";
-    banner.textContent = "أنت غير متصل بالإنترنت — البيانات بتتخزن على الجهاز وبتترفع تلقائيًا لما يرجع النت";
-  } else if (pending > 0) {
-    banner.style.display = "block";
-    banner.textContent = `جاري رفع ${pending} سجل معلّق للسيرفر...`;
-  } else {
-    banner.style.display = "none";
-  }
-}
-setInterval(updateOfflineBanner, 3000);
-window.addEventListener("online", updateOfflineBanner);
-window.addEventListener("offline", updateOfflineBanner);
+// ملاحظة: عمداً ما في أي إشارة لحالة الاتصال بالواجهة — الموظف ما لازم يعرف ولا يهتم.
+// الحفظ والمزامنة بيصيروا بالخلفية بشكل صامت سواء في نت أو لأ.
 
 function showToast(msg, isError) {
   const t = document.createElement("div");
@@ -71,14 +57,34 @@ async function loadHome() {
       return;
     }
   }
-  try { statusMap = await Api.get("getStatus"); } catch (e) { statusMap = {}; }
+  try {
+    statusMap = await Api.get("getStatus");
+    Local.statusCacheSet(statusMap);
+  } catch (e) {
+    statusMap = Local.statusCacheGet() || {}; // بدون نت: آخر حالة معروفة لنفس اليوم
+  }
+  mergeLocalOpenBreaks();
   renderHome();
-  updateOfflineBanner();
 
   gaugeInterval = setInterval(updateGauges, 1000);
   statusPollInterval = setInterval(async () => {
-    try { statusMap = await Api.get("getStatus"); updateGauges(); } catch (e) { /* يتجاهل، بيحاول تاني بعد شوي */ }
+    try {
+      statusMap = await Api.get("getStatus");
+      Local.statusCacheSet(statusMap);
+    } catch (e) { /* بدون نت — نبقي آخر نسخة معروفة */ }
+    mergeLocalOpenBreaks();
+    updateGauges();
   }, 15000);
+}
+
+// بيضمن إنه أي بريك اتسجل من نفس الجهاز (سواء انرفع للسيرفر أو لسا محلي بس) يبين
+// كـ"برا" بالشاشة الرئيسية والعداد، حتى لو ما قدرنا نجيب حالة السيرفر (بدون نت).
+function mergeLocalOpenBreaks() {
+  const localOpens = Local.getAllLocalOpenBreaks();
+  Object.keys(localOpens).forEach(employeeId => {
+    if (!statusMap[employeeId]) statusMap[employeeId] = { closedMinutes: 0 };
+    statusMap[employeeId].openLog = localOpens[employeeId];
+  });
 }
 
 function fmtElapsedHuman(ms) {
@@ -179,11 +185,7 @@ function renderReasonPicker(emp) {
 async function startBreak(emp, reason) {
   app.innerHTML = `<p class="center muted">جاري التسجيل...</p>`;
   const res = await Local.startBreak(emp.id, emp.name, reason);
-  const msg = res.offline
-    ? `تم الحفظ محليًا (${reason}) — بيترفع للسيرفر أول ما يرجع النت`
-    : `تم تسجيل الخروج (${reason}) الساعة ${fmtClock(new Date(res.outAt))}`;
-  showToast(msg, res.offline);
-  updateOfflineBanner();
+  showToast(`تم تسجيل الخروج (${reason}) الساعة ${fmtClock(new Date(res.outAt))}`);
   setTimeout(renderHome, 1600);
 }
 
@@ -222,13 +224,10 @@ async function endBreak(emp, log) {
   if (timerInterval) clearInterval(timerInterval);
   app.innerHTML = `<p class="center muted">جاري التسجيل...</p>`;
   const res = await Local.endBreak(log.id);
-  const msg = res.offline
-    ? `تم حفظ العودة محليًا — بترفع للسيرفر أول ما يرجع النت`
-    : (res.overLimit
-      ? `تم تسجيل العودة — المدة ${fmtDuration(res.durationMin)} (تجاوزت الوقت المسموح)`
-      : `تم تسجيل العودة — المدة ${fmtDuration(res.durationMin)}`);
-  showToast(msg, res.offline || res.overLimit);
-  updateOfflineBanner();
+  const msg = res.overLimit
+    ? `تم تسجيل العودة — المدة ${fmtDuration(res.durationMin)} (تجاوزت الوقت المسموح)`
+    : `تم تسجيل العودة — المدة ${fmtDuration(res.durationMin)}`;
+  showToast(msg, res.overLimit);
   setTimeout(renderHome, 1800);
 }
 
