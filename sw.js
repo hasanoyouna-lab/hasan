@@ -1,13 +1,14 @@
 // Service Worker: يخزّن هيكل التطبيق (HTML/CSS/JS/الخطوط) محلياً حتى يفتح بدون إنترنت نهائياً.
 // لا يتدخل أبداً بطلبات API_URL (Apps Script) — تلك تمر مباشرة للشبكة ويديرها js/api.js و js/offline.js.
 
-const CACHE_NAME = "attendance-shell-v3";
+const CACHE_NAME = "attendance-shell-v4";
+const ASSET_V = "4"; // لازم يطابق ?v= المكتوب بملفات HTML
 const SHELL_FILES = [
   "./",
   "./index.html",
   "./admin.html",
   "./manifest.json",
-  "./css/style.css",
+  "./css/style.css?v=" + ASSET_V,
   "./assets/logo.png",
   "./assets/fonts/tajawal-400-ar.woff2",
   "./assets/fonts/tajawal-400-lat.woff2",
@@ -15,12 +16,12 @@ const SHELL_FILES = [
   "./assets/fonts/tajawal-700-lat.woff2",
   "./assets/fonts/tajawal-800-ar.woff2",
   "./assets/fonts/tajawal-800-lat.woff2",
-  "./js/config.js",
-  "./js/api.js",
-  "./js/icons.js",
-  "./js/offline.js",
-  "./js/kiosk.js",
-  "./js/admin.js"
+  "./js/config.js?v=" + ASSET_V,
+  "./js/api.js?v=" + ASSET_V,
+  "./js/icons.js?v=" + ASSET_V,
+  "./js/offline.js?v=" + ASSET_V,
+  "./js/kiosk.js?v=" + ASSET_V,
+  "./js/admin.js?v=" + ASSET_V
 ];
 
 self.addEventListener("install", (event) => {
@@ -43,11 +44,15 @@ self.addEventListener("fetch", (event) => {
   if (new URL(req.url).origin !== self.location.origin) return; // ملفات خارجية (Apps Script) لا تُعترض
 
   // شبكة أولاً (عشان أي تحديث للكود ينعكس فورًا وأنت متصل)، وكاش كخطة بديلة لو النت مقطوع.
+  // ignoreSearch بالبديل: لو رقم النسخة (?v=) تغيّر وما لحقنا نخزّن الجديد، بنرجع
+  // للنسخة المخزّنة من نفس الملف بدل ما نطلع صفحة مكسورة أوفلاين.
   event.respondWith(
     fetch(req).then((res) => {
       const copy = res.clone();
       caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
       return res;
-    }).catch(() => caches.match(req))
+    }).catch(() =>
+      caches.match(req).then((hit) => hit || caches.match(req, { ignoreSearch: true }))
+    )
   );
 });
