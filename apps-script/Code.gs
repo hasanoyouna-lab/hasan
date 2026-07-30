@@ -96,6 +96,7 @@ function doGet(e) {
       case 'getSettings': data = getSettings(); break;
       case 'runSetup': data = setupEverything(); break;
       case 'repairDurations': data = repairNegativeDurations(); break;
+      case 'repairDuplicates': data = repairDuplicateLogs(); break;
       default: throw new Error('unknown action: ' + action);
     }
     return jsonOut({ ok: true, data: data });
@@ -119,6 +120,7 @@ function doPost(e) {
       case 'adminLogin': data = adminLogin(body.payload); break;
       case 'adjustDuration': data = adjustDuration(body.payload); break;
       case 'forceEndBreak': data = forceEndBreak(body.payload); break;
+      case 'deleteLog': data = deleteLog(body.payload); break;
       default: throw new Error('unknown action: ' + body.action);
     }
     return jsonOut({ ok: true, data: data });
@@ -320,9 +322,19 @@ function graceSecFor(reason, settings) {
 // وقت الخروج المسجل يبلش بعد مهلة السبب من لحظة الضغط (قرار متفق عليه) —
 // clientOutAt بيوصل بس لما التسجيل صار أصلاً بجهاز أوفلاين وقت الضغط (فيه ساعة الجهاز، مو السيرفر).
 function startBreak(p) {
+  // إعادة المحاولة من طابور الأوفلاين لازم تكون آمنة ومتكررة بلا أثر: إذا هذا الـ id
+  // مسجّل أصلاً — حتى لو انقفل بينهم — بنرجّعه زي ما هو بدل ما نضيف صف جديد.
+  // بدون هالفحص، كل إعادة محاولة بتنشئ بريك مكرر وبتعيد فتحه بعد ما انسكّر.
+  if (p.id) {
+    var known = readRecentRows(SHEET_NAMES.LOGS, 500).rows;
+    for (var i = 0; i < known.length; i++) {
+      if (known[i].id === p.id) return { id: p.id, outAt: known[i].outAt };
+    }
+  }
+
   var existing = getOpenLog(p.employeeId);
   if (existing && existing.id !== p.id) throw new Error('في بريك مفتوح أصلاً لهاد الموظف');
-  if (existing) return { id: existing.id, outAt: existing.outAt }; // نداء متكرر لنفس id (إعادة محاولة مزامنة)
+  if (existing) return { id: existing.id, outAt: existing.outAt };
 
   var id = p.id || Utilities.getUuid();
   var now = nowIso();
@@ -393,6 +405,48 @@ function adjustDuration(p) {
 // إنهاء بريك نسي صاحبه يسكّره، بمدة يحددها المدير
 function forceEndBreak(p) {
   return adjustDuration(p);
+}
+
+// حذف سجل نهائيًا (سجلات تجربة أو إدخال غلط). حذف فعلي مش تعليم — السجل بيختفي
+// من التقارير والمجاميع.
+function deleteLog(p) {
+  var r = readRows(SHEET_NAMES.LOGS);
+  for (var i = 0; i < r.rows.length; i++) {
+    if (r.rows[i].id === p.id) {
+      r.sh.deleteRow(i + 2);
+      return { deleted: 1, id: p.id };
+    }
+  }
+  return { deleted: 0, id: p.id };
+}
+
+// تنظيف الصفوف المكررة اللي انعملت قبل ما يصير startBreak آمن للتكرار.
+// لكل id بنبقي صف واحد: المقفول إن وُجد (فيه المدة الحقيقية)، وإلا الأول.
+function repairDuplicateLogs() {
+  var r = readRows(SHEET_NAMES.LOGS);
+  var keepRowFor = {};   // id → رقم الصف اللي بنبقيه
+  var toDelete = [];
+
+  for (var i = 0; i < r.rows.length; i++) {
+    var row = r.rows[i];
+    var id = row.id;
+    if (!id) continue;
+    var rowNum = i + 2;
+    if (!keepRowFor.hasOwnProperty(id)) { keepRowFor[id] = { rowNum: rowNum, closed: row.status === 'closed' }; continue; }
+    // في مكرر: نفضّل المقفول
+    var kept = keepRowFor[id];
+    if (!kept.closed && row.status === 'closed') {
+      toDelete.push(kept.rowNum);
+      keepRowFor[id] = { rowNum: rowNum, closed: true };
+    } else {
+      toDelete.push(rowNum);
+    }
+  }
+
+  // بنحذف من تحت لفوق حتى أرقام الصفوف ما تزحف
+  toDelete.sort(function (a, b) { return b - a; });
+  toDelete.forEach(function (n) { r.sh.deleteRow(n); });
+  return { removed: toDelete.length };
 }
 
 // إصلاح لمرة وحدة للسجلات القديمة اللي انحفظت بمدة سالبة (عودة خلال مهلة الاحتساب)

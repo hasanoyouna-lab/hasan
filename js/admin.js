@@ -184,8 +184,12 @@ async function renderReport(body, start, end) {
         <td>${fmtTime(l.outAt)}${outMark}</td>
         <td>${l.status === "open" ? "لسا برا" : fmtTime(l.inAt) + inMark}</td>
         <td>${l.status === "open" ? "-" : fmtDuration(l.durationMin)}${adjMark}</td>
-        <td><button class="btn secondary" style="padding:6px 12px;font-size:13px"
-              data-fix="${l.id}" data-cur="${l.status === "open" ? "" : l.durationMin}">تعديل</button></td>
+        <td style="white-space:nowrap">
+          <button class="btn secondary" style="padding:6px 11px;font-size:13px"
+              data-fix="${l.id}" data-cur="${l.status === "open" ? "" : l.durationMin}">تعديل</button>
+          <button class="btn danger" style="padding:6px 11px;font-size:13px"
+              data-del="${l.id}" title="حذف السجل نهائيًا">حذف</button>
+        </td>
       </tr>`;
     }).join("");
     body.innerHTML = `
@@ -198,7 +202,7 @@ async function renderReport(body, start, end) {
       </div>
       <div class="panel">
         <table>
-          <thead><tr><th>الموظف</th><th>السبب</th><th>التاريخ</th><th>الخروج</th><th>العودة</th><th>المدة</th><th></th></tr></thead>
+          <thead><tr><th>الموظف</th><th>السبب</th><th>التاريخ</th><th>الخروج</th><th>العودة</th><th>المدة</th><th>إجراءات</th></tr></thead>
           <tbody>${rows || `<tr><td colspan="7" class="muted">ما في سجلات بهاي الفترة</td></tr>`}</tbody>
         </table>
         <p class="muted" style="margin-top:10px; font-size:12px;">
@@ -223,6 +227,17 @@ async function renderReport(body, start, end) {
         renderReport(body, document.getElementById("startDate").value, document.getElementById("endDate").value);
       } catch (e) {
         alert("تعذّر التعديل: " + e.message);
+        btn.disabled = false;
+      }
+    });
+    body.querySelectorAll("[data-del]").forEach(btn => btn.onclick = async () => {
+      if (!confirm("حذف هذا السجل نهائيًا؟ ما بينرجع.")) return;
+      btn.disabled = true;
+      try {
+        await Api.post("deleteLog", { id: btn.dataset.del });
+        renderReport(body, document.getElementById("startDate").value, document.getElementById("endDate").value);
+      } catch (e) {
+        alert("تعذّر الحذف: " + e.message);
         btn.disabled = false;
       }
     });
