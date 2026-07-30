@@ -16,6 +16,16 @@ const POLL_MS = 20000;
 
 // ===================== أدوات =====================
 function graceSec() { const v = Number(settings.breakStartDelaySec); return isNaN(v) ? 45 : v; }
+// مهلة خاصة بالسبب إن وُجدت (مثلاً الحمام ٥ دقايق)، وإلا المهلة العامة.
+// نفس منطق graceSecFor بالسيرفر بالضبط، حتى العدّاد المعروض يطابق الوقت المحفوظ.
+function graceSecFor(reason) {
+  try {
+    const map = JSON.parse(settings.reasonGraceSec || "{}");
+    const v = Number(map[reason]);
+    if (!isNaN(v) && v >= 0) return v;
+  } catch (e) { /* إعداد غير صالح — نرجع للعامة */ }
+  return graceSec();
+}
 function maxBreakMin() { return Number(settings.maxBreakMinutes) || 30; }
 function dailyLimitMin() { return Number(settings.dailyLimitMinutes) || 60; }
 
@@ -217,7 +227,8 @@ function paintLive() {
     if (sub) {
       if (open) {
         const elapsed = Date.now() - new Date(open.outAt).getTime();
-        sub.innerHTML = `${Icons.svg(open.reason, 17)}<span>${elapsed < 0 ? "بدأ للتو" : mmss(elapsed)}</span>`;
+        const label = elapsed < 0 ? `سماح ${mmss(-elapsed)}` : mmss(elapsed);
+        sub.innerHTML = `${Icons.svg(open.reason, 17)}<span>${label}</span>`;
       } else {
         sub.innerHTML = "";
       }
@@ -278,7 +289,7 @@ function renderReasonPicker(emp) {
 // ===================== بدء البريك =====================
 function startBreak(emp, reason) {
   // التسجيل محلي وفوري — بننتقل للعدّاد بنفس اللحظة والشبكة تلحقنا بالخلفية
-  const res = Local.startBreak(emp.id, emp.name, reason, graceSec());
+  const res = Local.startBreak(emp.id, emp.name, reason, graceSecFor(reason));
   if (!statusMap[emp.id]) statusMap[emp.id] = { closedMinutes: 0 };
   statusMap[emp.id].openLog = { reason, outAt: res.outAt };
   renderOpenBreak(emp, { id: res.id, reason, outAt: res.outAt });
@@ -333,14 +344,14 @@ function renderOpenBreak(emp, log) {
 
     if (elapsed < 0) {
       // مهلة ما قبل الاحتساب: الحلقة بتفضى تنازليًا والعدّاد لسا صفر
-      const total = graceSec() * 1000;
+      const total = graceSecFor(currentBreak.reason) * 1000;
       const p = Math.max(0, Math.min(1, -elapsed / total));
       bar.style.strokeDashoffset = (C * (1 - p)).toFixed(1);
       bar.style.stroke = "var(--yellow-deep)";
-      timeEl.textContent = "00:00";
+      timeEl.textContent = mmss(-elapsed);
       timeEl.classList.remove("over");
-      capEl.textContent = "لسا ما بدأ الاحتساب";
-      graceBox.innerHTML = `<span class="grace-note">يبدأ الاحتساب بعد ${Math.ceil(-elapsed / 1000)} ثانية</span>`;
+      capEl.textContent = "متبقٍ من فترة السماح";
+      graceBox.innerHTML = `<span class="grace-note">فترة سماح — الاحتساب لسا ما بدأ</span>`;
       return;
     }
 

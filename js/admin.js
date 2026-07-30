@@ -237,10 +237,13 @@ async function renderSettings(body) {
           <input type="number" id="dailyLimit" value="${settings.dailyLimitMinutes || 60}" style="width:110px;" />
         </div>
 
-        <p style="margin-top:22px;"><b>مهلة قبل بدء الاحتساب</b> (ثانية) — الوقت المسموح للوصول</p>
+        <p style="margin-top:22px;"><b>فترة السماح العامة</b> (ثانية) — لأي سبب ما إله فترة خاصة</p>
         <div class="row">
           <input type="number" id="graceSec" value="${settings.breakStartDelaySec != null ? settings.breakStartDelaySec : 45}" style="width:110px;" />
         </div>
+
+        <p style="margin-top:22px;"><b>فترة سماح خاصة لكل سبب</b> (دقيقة) — اتركه فاضي ليستخدم العامة</p>
+        <div id="graceRows"></div>
 
         <p style="margin-top:22px;"><b>أسباب الخروج</b> (افصل بينها بفاصلة ,)</p>
         <div class="row">
@@ -258,11 +261,34 @@ async function renderSettings(body) {
         </div>
       </div>
     `;
+    // صف لكل سبب موجود حاليًا. المدخل بالدقايق (أسهل للقراءة) والتخزين بالثواني.
+    let graceMap = {};
+    try { graceMap = JSON.parse(settings.reasonGraceSec || "{}"); } catch (e) { graceMap = {}; }
+    const reasonList = (settings.reasons || "").split(",").map(s => s.trim()).filter(Boolean);
+    document.getElementById("graceRows").innerHTML = reasonList.map(r => {
+      const sec = Number(graceMap[r]);
+      const mins = !isNaN(sec) && sec >= 0 ? (sec / 60) : "";
+      return `<div class="row" style="margin-bottom:8px">
+        <span style="display:inline-flex;align-items:center;gap:7px;min-width:150px;font-weight:700">
+          ${Icons.svg(r, 18)}${r}</span>
+        <input type="number" step="0.5" min="0" data-grace="${r.replace(/"/g, "&quot;")}"
+               value="${mins}" placeholder="عام" style="width:100px" /> دقيقة
+      </div>`;
+    }).join("");
+
     document.getElementById("saveBtn").onclick = async () => {
+      const newGrace = {};
+      document.querySelectorAll("[data-grace]").forEach(inp => {
+        const v = inp.value.trim();
+        if (v === "") return;                       // فاضي = استخدم العامة
+        const mins = Number(v);
+        if (!isNaN(mins) && mins >= 0) newGrace[inp.dataset.grace] = Math.round(mins * 60);
+      });
       await Api.post("saveSettings", {
         maxBreakMinutes: Number(document.getElementById("maxBreak").value) || 30,
         dailyLimitMinutes: Number(document.getElementById("dailyLimit").value) || 60,
         breakStartDelaySec: Number(document.getElementById("graceSec").value) || 0,
+        reasonGraceSec: JSON.stringify(newGrace),
         reasons: document.getElementById("reasons").value,
         adminPassword: document.getElementById("adminPassword").value
       });

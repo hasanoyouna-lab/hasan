@@ -295,14 +295,21 @@ function addSecondsIso(iso, secs) {
   return new Date(new Date(iso).getTime() + secs * 1000).toISOString();
 }
 
-// مصدر واحد للحقيقة: الواجهة بتقرأ نفس الإعداد عشان العدّاد اللي بيشوفه الموظف
+// مصدر واحد للحقيقة: الواجهة بتقرأ نفس الإعدادات عشان العدّاد اللي بيشوفه الموظف
 // يطابق تمامًا الوقت اللي بينحفظ بالسيرفر.
-function breakStartDelaySec() {
-  var v = Number(getSettings().breakStartDelaySec);
-  return isNaN(v) || v < 0 ? BREAK_START_DELAY_SEC : v;
+// مهلة عامة، وممكن مهلة خاصة لكل سبب (مثلاً الحمام ٥ دقايق) عبر إعداد reasonGraceSec
+// وهو JSON بالشكل {"حمام":300}. أي سبب مش مذكور فيه بياخد المهلة العامة.
+function graceSecFor(reason, settings) {
+  var s = settings || getSettings();
+  var map = {};
+  try { map = JSON.parse(s.reasonGraceSec || '{}'); } catch (e) { map = {}; }
+  var perReason = Number(map[reason]);
+  if (!isNaN(perReason) && perReason >= 0) return perReason;
+  var general = Number(s.breakStartDelaySec);
+  return isNaN(general) || general < 0 ? BREAK_START_DELAY_SEC : general;
 }
 
-// وقت الخروج المسجل يبلش بعد BREAK_START_DELAY_SEC ثانية من لحظة الضغط (قرار متفق عليه) —
+// وقت الخروج المسجل يبلش بعد مهلة السبب من لحظة الضغط (قرار متفق عليه) —
 // clientOutAt بيوصل بس لما التسجيل صار أصلاً بجهاز أوفلاين وقت الضغط (فيه ساعة الجهاز، مو السيرفر).
 function startBreak(p) {
   var existing = getOpenLog(p.employeeId);
@@ -311,7 +318,7 @@ function startBreak(p) {
 
   var id = p.id || Utilities.getUuid();
   var now = nowIso();
-  var outAt = p.clientOutAt ? p.clientOutAt : addSecondsIso(now, breakStartDelaySec());
+  var outAt = p.clientOutAt ? p.clientOutAt : addSecondsIso(now, graceSecFor(p.reason));
   var outOffline = !!p.clientOutAt;
   appendRow(SHEET_NAMES.LOGS, {
     id: id, employeeId: p.employeeId, employeeName: p.employeeName, reason: p.reason,
