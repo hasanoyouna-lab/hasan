@@ -130,8 +130,8 @@ const Local = (() => {
   function getAllLocalOpenBreaks() {
     const breaks = getBreaks();
     const out = {};
-    Object.values(breaks).forEach(r => {
-      if (!r.inAt) out[r.employeeId] = { reason: r.reason, outAt: r.outAt };
+    Object.entries(breaks).forEach(([id, r]) => {
+      if (!r.inAt) out[r.employeeId] = { id, reason: r.reason, outAt: r.outAt };
     });
     return out;
   }

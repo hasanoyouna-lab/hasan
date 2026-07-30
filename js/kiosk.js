@@ -259,6 +259,16 @@ function paintLive() {
 async function openEmployee(emp) {
   stopPolling();
   armIdle();
+
+  // statusMap محدّثة أصلاً (استعلام كل ٢٠ ثانية + دمج البريكات المحلية)، فبنستخدمها
+  // فورًا بدون أي انتظار للشبكة. نداء الشبكة بس لو ما عندنا خبر عن هاد الموظف نهائيًا.
+  const known = statusMap[emp.id];
+  if (known) {
+    if (known.openLog) renderOpenBreak(emp, known.openLog);
+    else renderReasonPicker(emp);
+    return;
+  }
+
   const open = await Local.getOpenBreak(emp.id, emp.name);
   if (open) renderOpenBreak(emp, open);
   else renderReasonPicker(emp);

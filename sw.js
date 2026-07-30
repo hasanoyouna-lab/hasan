@@ -1,8 +1,8 @@
 // Service Worker: يخزّن هيكل التطبيق (HTML/CSS/JS/الخطوط) محلياً حتى يفتح بدون إنترنت نهائياً.
 // لا يتدخل أبداً بطلبات API_URL (Apps Script) — تلك تمر مباشرة للشبكة ويديرها js/api.js و js/offline.js.
 
-const CACHE_NAME = "attendance-shell-v5";
-const ASSET_V = "5"; // لازم يطابق ?v= المكتوب بملفات HTML
+const CACHE_NAME = "attendance-shell-v6";
+const ASSET_V = "6"; // لازم يطابق ?v= المكتوب بملفات HTML
 const SHELL_FILES = [
   "./",
   "./index.html",
