@@ -271,6 +271,8 @@ function getOpenLogs() {
 
 // إجمالي دقائق البريكات المستخدمة اليوم لكل موظف (كل البريكات المقفولة + البريك المفتوح
 // الحالي إذا في)، يستخدم لميزان الحرارة بالواجهة (أخضر ← أحمر حسب الحد اليومي dailyLimitMinutes).
+// byReason بيعطي تفصيل "وين قضى وقته" لكل سبب — بنحسبه هون بنفس المرور على الصفوف
+// عشان ملخّص الموظف ما يحتاج طلب إضافي للسيرفر.
 function getStatus() {
   var tz = Session.getScriptTimeZone();
   var todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
@@ -279,11 +281,17 @@ function getStatus() {
   rows.forEach(function (r) {
     var day = localDayOf(r.outAt, tz);
     if (day !== todayStr) return;
-    if (!byEmployee[r.employeeId]) byEmployee[r.employeeId] = { closedMinutes: 0, openLog: null };
+    if (!byEmployee[r.employeeId]) byEmployee[r.employeeId] = { closedMinutes: 0, openLog: null, byReason: {} };
+    var emp = byEmployee[r.employeeId];
     if (r.status === 'closed') {
-      byEmployee[r.employeeId].closedMinutes += Math.max(0, Number(r.durationMin) || 0);
+      var mins = Math.max(0, Number(r.durationMin) || 0);
+      emp.closedMinutes += mins;
+      var key = r.reason || 'غير محدد';
+      if (!emp.byReason[key]) emp.byReason[key] = { mins: 0, count: 0 };
+      emp.byReason[key].mins += mins;
+      emp.byReason[key].count += 1;
     } else if (r.status === 'open') {
-      byEmployee[r.employeeId].openLog = { id: r.id, reason: r.reason, outAt: r.outAt };
+      emp.openLog = { id: r.id, reason: r.reason, outAt: r.outAt };
     }
   });
   return byEmployee;

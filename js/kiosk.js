@@ -264,6 +264,49 @@ function paintLive() {
   }
 }
 
+// ===================== ملخص يوم الموظف =====================
+function timesWord(n) {
+  if (n === 1) return "مرة";
+  if (n === 2) return "مرتين";
+  if (n >= 3 && n <= 10) return "مرات";
+  return "مرة";
+}
+
+// "وين قضى وقته اليوم" — مرتّب من الأطول للأقصر
+function daySummaryHtml(empId) {
+  const st = statusMap[empId] || {};
+  const byReason = st.byReason || {};
+  const limit = dailyLimitMin();
+  const entries = Object.entries(byReason).sort((a, b) => b[1].mins - a[1].mins);
+
+  if (!entries.length && !st.openLog) {
+    return `<div class="summary">
+      <div class="summary-head">ملخص اليوم</div>
+      <p class="center muted" style="margin:10px 0 2px">ما طلعت ولا مرة اليوم</p>
+    </div>`;
+  }
+
+  const rows = entries.map(([reason, v]) => `
+    <div class="sum-row">
+      <span class="sum-name">${Icons.svg(reason, 18)}<span>${escapeHtml(reason)}</span></span>
+      <span class="sum-count">${v.count} ${timesWord(v.count)}</span>
+      <span class="sum-mins">${Math.round(v.mins)} د</span>
+    </div>`).join("");
+
+  const used = usedMinutes(empId);
+  const pct = Math.min(100, (used / limit) * 100);
+  return `<div class="summary">
+    <div class="summary-head">ملخص اليوم</div>
+    ${rows}
+    <div class="sum-total">
+      <span>المجموع</span>
+      <span id="sumTotal">${Math.round(used)} من ${limit} دقيقة</span>
+    </div>
+    <div class="gauge-wrap"><div class="gauge-fill" id="sumBar"
+         style="width:${pct}%; background-color:${scaleColor(used / limit)}"></div></div>
+  </div>`;
+}
+
 // ===================== اختيار الموظف =====================
 async function openEmployee(emp) {
   stopPolling();
@@ -298,6 +341,7 @@ function renderReasonPicker(emp) {
           <span>${escapeHtml(r)}</span>
         </div>`).join("")}
     </div>
+    ${daySummaryHtml(emp.id)}
   `);
 
   attachPress(document.getElementById("back"), goHome);
@@ -350,6 +394,7 @@ function renderOpenBreak(emp, log) {
     <div class="center" style="margin-top:16px">
       <button class="btn danger big" id="endBtn">تسجيل العودة</button>
     </div>
+    ${daySummaryHtml(emp.id)}
   `);
 
   const bar = app.querySelector(".bar");
@@ -381,6 +426,19 @@ function renderOpenBreak(emp, log) {
     bar.style.stroke = scaleColor(p);
     timeEl.textContent = mmss(elapsed);
     timeEl.classList.toggle("over", elapsed > maxMs);
+
+    // مجموع اليوم بالملخص تحت بيزيد مع البريك الجاري
+    const totalEl = document.getElementById("sumTotal");
+    if (totalEl) {
+      const limit = dailyLimitMin();
+      const used = usedMinutes(emp.id);
+      totalEl.textContent = `${Math.round(used)} من ${limit} دقيقة`;
+      const sumBar = document.getElementById("sumBar");
+      if (sumBar) {
+        sumBar.style.width = Math.min(100, (used / limit) * 100) + "%";
+        sumBar.style.backgroundColor = scaleColor(used / limit);
+      }
+    }
   }
 
   tick();

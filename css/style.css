@@ -274,6 +274,49 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ===================== ملخص اليوم ===================== */
+.summary {
+  max-width: 460px;
+  margin: 26px auto 0;
+  background: #fff;
+  border: 2.5px solid #000;
+  border-radius: var(--radius);
+  padding: 16px 18px 18px;
+  box-shadow: var(--shadow);
+  animation: cardIn .34s var(--ease) both;
+  animation-delay: 120ms;
+}
+.summary-head {
+  text-align: center; font-weight: 800; font-size: 16px;
+  padding-bottom: 10px; margin-bottom: 4px;
+  border-bottom: 2px solid var(--surface2);
+}
+.sum-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--surface2);
+  font-size: 15px;
+}
+.sum-row:last-of-type { border-bottom: none; }
+.sum-name {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; flex: 1; min-width: 0;
+}
+.sum-name .icon { flex-shrink: 0; }
+.sum-count { color: var(--muted); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.sum-mins {
+  font-weight: 800; min-width: 52px; text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.sum-total {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 12px; padding-top: 12px;
+  border-top: 2.5px solid #000;
+  font-weight: 800; font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.summary .gauge-wrap { margin-top: 10px; }
+
 /* ===================== الشاشات ===================== */
 .view { animation: viewIn .3s var(--ease) both; }
 @keyframes viewIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
