@@ -10,15 +10,22 @@
 <link rel="preload" href="assets/fonts/tajawal-400-ar.woff2" as="font" type="font/woff2" crossorigin />
 <!-- ?v= على كل ملف: GitHub Pages بيخلي المتصفح يخزّن الملفات ١٠ دقايق، وبدون هاد
      ممكن يفتح HTML جديد مع CSS/JS قديم بعد أي تحديث. زوّد الرقم مع كل نشر. -->
-<link rel="stylesheet" href="css/style.css?v=12" />
+<link rel="stylesheet" href="css/style.css?v=13" />
 </head>
 <body>
   <div class="watermark"></div>
 
   <div class="header">
     <div class="branch-label">فرع عبداللطيف جميل</div>
+    <button class="admin-btn" id="adminBtn" aria-label="لوحة الإدارة" title="لوحة الإدارة">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.2"/>
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9.1a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9.1a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1z"/>
+      </svg>
+    </button>
     <div class="header-row">
-      <img class="header-logo" src="assets/logo.png" alt="Pro House" />
+      <img class="header-logo" src="assets/logo.png" alt="Pro House" draggable="false" />
       <h1>تسجيل الدخول والخروج</h1>
     </div>
     <div class="clock" id="clock">--:--:--</div>
@@ -27,11 +34,11 @@
 
   <div class="container" id="app"></div>
 
-  <script src="js/config.js?v=12"></script>
-  <script src="js/api.js?v=12"></script>
-  <script src="js/icons.js?v=12"></script>
-  <script src="js/offline.js?v=12"></script>
-  <script src="js/kiosk.js?v=12"></script>
+  <script src="js/config.js?v=13"></script>
+  <script src="js/api.js?v=13"></script>
+  <script src="js/icons.js?v=13"></script>
+  <script src="js/offline.js?v=13"></script>
+  <script src="js/kiosk.js?v=13"></script>
   <script>
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
   </script>

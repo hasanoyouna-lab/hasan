@@ -492,27 +492,28 @@ function renderDone(emp, res) {
   setTimeout(() => { if (document.getElementById("doneBtn")) goHome(); }, 3200);
 }
 
-// ===================== دخول الإدارة (مخفي) =====================
-// ما في رابط ظاهر للإدارة عمدًا. الدخول بضغطة مطوّلة ٣ ثواني على الشعار —
-// مدة طويلة كفاية إنها ما تصير بالغلط، والموظف ما بيكتشفها.
-(function setupHiddenAdminEntry() {
+// ===================== دخول الإدارة =====================
+// زر الترس بزاوية الهيدر هو الطريق الأساسي. الضغطة المطوّلة على الشعار ضلت
+// كطريق احتياطي. الحماية الحقيقية كلمة السر (بتنطلب كل مرة) مش إخفاء الزر.
+(function setupAdminEntry() {
+  const go = () => { buzz(20); location.href = "admin.html"; };
+
+  const btn = document.getElementById("adminBtn");
+  if (btn) btn.addEventListener("click", go);
+
   const logo = document.querySelector(".header-logo");
   if (!logo) return;
   let timer = null;
-
   const start = () => {
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      logo.style.opacity = ".35";
-      buzz(30);
-      setTimeout(() => { location.href = "admin.html"; }, 160);
-    }, 3000);
+    timer = setTimeout(() => { logo.style.opacity = ".35"; go(); }, 3000);
   };
   const cancel = () => { clearTimeout(timer); timer = null; };
 
   logo.addEventListener("pointerdown", start);
   ["pointerup", "pointerleave", "pointercancel"].forEach(ev => logo.addEventListener(ev, cancel));
-  logo.addEventListener("contextmenu", ev => ev.preventDefault()); // يمنع قائمة "حفظ الصورة" وقت الضغط المطوّل
+  logo.addEventListener("contextmenu", ev => ev.preventDefault());
+  logo.addEventListener("dragstart", ev => ev.preventDefault());
 })();
 
 goHome();
