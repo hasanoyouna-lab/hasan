@@ -1,5 +1,26 @@
 const app = document.getElementById("app");
-const AUTH_KEY = "mt_admin_ok";
+
+// اللوحة ما بتحفظ جلسة أبدًا: كلمة السر بتنطلب كل مرة تُفتح الصفحة، وبتنقفل
+// لحالها بعد سكون. جهاز الكاشير مشترك، فأي لوحة ضلت مفتوحة = بيانات مكشوفة.
+const LOCK_AFTER_MS = 90000;
+let lockTimer = null;
+
+function lockNow() {
+  clearTimeout(lockTimer);
+  lockTimer = null;
+  if (nowRefreshTimer) { clearInterval(nowRefreshTimer); nowRefreshTimer = null; }
+  renderLogin("انقفلت لعدم الاستخدام");
+}
+function armLock() {
+  clearTimeout(lockTimer);
+  lockTimer = setTimeout(lockNow, LOCK_AFTER_MS);
+}
+["pointerdown", "keydown"].forEach(ev =>
+  document.addEventListener(ev, () => { if (lockTimer) armLock(); }, { passive: true }));
+// الرجوع من الخلفية بعد غياب = إقفال فوري
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && lockTimer) lockNow();
+});
 
 function fmtTime(iso) {
   if (!iso) return "-";
@@ -17,33 +38,47 @@ function todayStr() {
 }
 
 async function boot() {
-  if (sessionStorage.getItem(AUTH_KEY) === "1") return renderDashboard();
+  sessionStorage.removeItem("mt_admin_ok"); // ينظّف جلسات النسخة القديمة اللي كانت بتضل مفتوحة
   renderLogin();
 }
 
-function renderLogin() {
+function renderLogin(note) {
+  clearTimeout(lockTimer);
+  lockTimer = null;
   app.innerHTML = `
-    <div class="panel" style="max-width:360px; margin:40px auto;">
-      <p class="center">كلمة السر</p>
+    <div class="panel" style="max-width:380px; margin:40px auto;">
+      <p class="center" style="font-weight:800;font-size:18px;margin-top:0">كلمة السر</p>
+      ${note ? `<p class="center muted" style="margin-top:-6px">${note}</p>` : ""}
       <div class="row center" style="justify-content:center;">
-        <input type="password" id="pw" style="width:160px;" />
+        <input type="password" id="pw" inputmode="numeric" autocomplete="off" style="width:160px;" />
         <button class="btn" id="loginBtn">دخول</button>
       </div>
-      <p class="center muted" id="loginErr" style="display:none; color:#E5484D;">كلمة سر غلط</p>
+      <p class="center" id="loginErr" style="display:none; color:var(--danger-deep); font-weight:700;">كلمة سر غلط</p>
+      <div class="center" style="margin-top:14px">
+        <a href="index.html" style="color:var(--muted);font-size:14px;font-weight:700">‹ رجوع لشاشة الموظفين</a>
+      </div>
     </div>
   `;
+  const btn = document.getElementById("loginBtn");
   const doLogin = async () => {
     const pw = document.getElementById("pw").value;
+    btn.disabled = true;
     try {
       const res = await Api.post("adminLogin", { password: pw });
-      if (res.ok) { sessionStorage.setItem(AUTH_KEY, "1"); renderDashboard(); }
-      else document.getElementById("loginErr").style.display = "block";
+      if (res.ok) { armLock(); renderDashboard(); }
+      else {
+        document.getElementById("loginErr").style.display = "block";
+        document.getElementById("pw").value = "";
+        btn.disabled = false;
+      }
     } catch (e) {
       alert(e.message);
+      btn.disabled = false;
     }
   };
-  document.getElementById("loginBtn").onclick = doLogin;
+  btn.onclick = doLogin;
   document.getElementById("pw").addEventListener("keydown", ev => { if (ev.key === "Enter") doLogin(); });
+  document.getElementById("pw").focus();
 }
 
 async function renderDashboard() {
@@ -53,10 +88,12 @@ async function renderDashboard() {
       <button class="btn secondary" data-tab="report">التقرير</button>
       <button class="btn secondary" data-tab="employees">الموظفين</button>
       <button class="btn secondary" data-tab="settings">الإعدادات</button>
-      <a href="index.html" class="btn secondary" style="text-decoration:none; margin-inline-start:auto;">الكشك</a>
+      <button class="btn danger" id="lockBtn" style="margin-inline-start:auto;">قفل</button>
+      <a href="index.html" class="btn secondary" style="text-decoration:none;">الكشك</a>
     </div>
     <div id="tabBody"></div>
   `;
+  document.getElementById("lockBtn").onclick = lockNow;
   app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => loadTab(b.dataset.tab));
   loadTab("now");
 }

@@ -422,4 +422,27 @@ function renderDone(emp, res) {
   setTimeout(() => { if (document.getElementById("doneBtn")) goHome(); }, 3200);
 }
 
+// ===================== دخول الإدارة (مخفي) =====================
+// ما في رابط ظاهر للإدارة عمدًا. الدخول بضغطة مطوّلة ٣ ثواني على الشعار —
+// مدة طويلة كفاية إنها ما تصير بالغلط، والموظف ما بيكتشفها.
+(function setupHiddenAdminEntry() {
+  const logo = document.querySelector(".header-logo");
+  if (!logo) return;
+  let timer = null;
+
+  const start = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      logo.style.opacity = ".35";
+      buzz(30);
+      setTimeout(() => { location.href = "admin.html"; }, 160);
+    }, 3000);
+  };
+  const cancel = () => { clearTimeout(timer); timer = null; };
+
+  logo.addEventListener("pointerdown", start);
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => logo.addEventListener(ev, cancel));
+  logo.addEventListener("contextmenu", ev => ev.preventDefault()); // يمنع قائمة "حفظ الصورة" وقت الضغط المطوّل
+})();
+
 goHome();
