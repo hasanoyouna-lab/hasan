@@ -120,22 +120,43 @@ async function renderNow(body) {
       const rows = openLogs.map(l => {
         const elapsed = Math.floor((Date.now() - new Date(l.outAt).getTime()) / 60000);
         const cls = elapsed >= maxMinutes ? "overlimit" : "open";
+        // تجاوز الضِعف = على الأغلب نسي يسجّل عودته، منميّزه حتى ما يضيع بين الباقي
+        const stale = elapsed > maxMinutes * 2 ? " ⚠ غالبًا نسي العودة" : "";
         return `<tr class="${cls}">
           <td>${l.employeeName}</td>
           <td><span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">
             ${Icons.svg(l.reason, 16)}${l.reason}</span></td>
           <td>${fmtTime(l.outAt)}</td>
-          <td>${elapsed >= 0 ? elapsed + " د" : "-"}</td>
+          <td>${elapsed >= 0 ? elapsed + " د" : "-"}${stale}</td>
+          <td><button class="btn danger" style="padding:6px 12px;font-size:13px"
+                data-end="${l.id}" data-mins="${Math.max(0, elapsed)}">إنهاء</button></td>
         </tr>`;
       }).join("");
       body.innerHTML = `
         <div class="panel">
           <table>
-            <thead><tr><th>الموظف</th><th>السبب</th><th>خرج الساعة</th><th>المدة الحالية</th></tr></thead>
+            <thead><tr><th>الموظف</th><th>السبب</th><th>خرج الساعة</th><th>المدة الحالية</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
+          <p class="muted" style="margin-top:10px; font-size:12px;">
+            "إنهاء" بتسكّر بريك نسي صاحبه يضغط عودة — بتحدّد إنت المدة الصحيحة
+          </p>
         </div>
       `;
+      body.querySelectorAll("[data-end]").forEach(btn => btn.onclick = async () => {
+        const val = prompt("مدة البريك بالدقائق:", btn.dataset.mins);
+        if (val === null) return;
+        const mins = Number(val);
+        if (isNaN(mins) || mins < 0) { alert("رقم غير صالح"); return; }
+        btn.disabled = true;
+        try {
+          await Api.post("forceEndBreak", { id: btn.dataset.end, durationMin: mins });
+          renderNow(body);
+        } catch (e) {
+          alert("تعذّر الإنهاء: " + e.message);
+          btn.disabled = false;
+        }
+      });
     }
     nowRefreshTimer = setInterval(() => renderNow(body), 10000);
   } catch (e) {

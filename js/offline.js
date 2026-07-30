@@ -136,7 +136,28 @@ const Local = (() => {
     return out;
   }
 
+  // لو السيرفر أكّد استلام بداية البريك، وبعدها صار ما بيعرضه مفتوح (انقفل من جهاز
+  // تاني أو من لوحة الإدارة)، معناها النسخة المحلية بايتة. بنمسحها حتى الموظف
+  // ما يضل "معلّق برا" على هاد الجهاز للأبد.
+  function reconcileWithServer(serverStatus) {
+    if (!serverStatus) return;
+    const breaks = getBreaks();
+    let changed = false;
+    Object.entries(breaks).forEach(([id, r]) => {
+      if (r.inAt) return;                 // مسكّر محليًا أصلاً
+      if (r.needsSync && r.needsSync.start) return; // لسا ما وصل السيرفر — نخلي الطابور يحاول
+      const st = serverStatus[r.employeeId];
+      const stillOpenOnServer = st && st.openLog && st.openLog.id === id;
+      if (!stillOpenOnServer) { delete breaks[id]; changed = true; }
+    });
+    if (changed) setBreaks(breaks);
+  }
+
   // ==================== المزامنة ====================
+  // بعد هالعدد من المحاولات الفاشلة بنعتبر العنصر ميؤوس منه ونرميه. بدون هاد، عنصر
+  // واحد مرفوض من السيرفر (مثلاً بريك انحذف) بيسدّ الطابور ويمنع كل البريكات
+  // اللي بعده من الوصول للشيت نهائيًا.
+  const MAX_ATTEMPTS = 10;
   let flushing = false;
   async function flushQueue() {
     if (flushing) return;
@@ -165,6 +186,15 @@ const Local = (() => {
           maybeCleanup(item.id);
         } catch (e) {
           item.attempts += 1;
+          if (item.attempts >= MAX_ATTEMPTS) {
+            // رفض دائم من السيرفر (مش انقطاع نت) — نرميه وننضّف سجله حتى ما يسدّ الطابور
+            const dead = getBreaks();
+            delete dead[item.id];
+            setBreaks(dead);
+            q.shift();
+            setQueue(q);
+            continue;
+          }
           setQueue(q);
           break; // غالباً لسا ما في نت — نوقف ونجرب لاحقاً
         }
@@ -188,6 +218,6 @@ const Local = (() => {
   return {
     startBreak, endBreak, getOpenBreak, getAllLocalOpenBreaks,
     cacheSet, cacheGet, statusCacheSet, statusCacheGet,
-    flushQueue, pendingCount, onOutAtCorrected
+    flushQueue, pendingCount, onOutAtCorrected, reconcileWithServer
   };
 })();

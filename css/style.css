@@ -273,6 +273,11 @@ html, body {
   padding: 7px 16px; font-size: 14px; font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+.grace-note.warn {
+  background: var(--danger); color: #fff; border-color: var(--danger-deep);
+  animation: nudge 1.8s ease-in-out infinite;
+}
+@keyframes nudge { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 
 /* ===================== ملخص اليوم ===================== */
 .summary {

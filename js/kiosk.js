@@ -141,12 +141,16 @@ async function goHome() {
 }
 
 async function refreshStatus() {
+  let fresh = false;
   try {
     statusMap = await Api.get("getStatus");
     Local.statusCacheSet(statusMap);
+    fresh = true;
   } catch (e) {
     statusMap = statusMap && Object.keys(statusMap).length ? statusMap : (Local.statusCacheGet() || {});
   }
+  // التنظيف بس مع رد طازة من السيرفر — مش من كاش ممكن يكون قديم
+  if (fresh) Local.reconcileWithServer(statusMap);
   mergeLocalOpenBreaks();
 }
 
@@ -355,7 +359,9 @@ function startBreak(emp, reason) {
   // التسجيل محلي وفوري — بننتقل للعدّاد بنفس اللحظة والشبكة تلحقنا بالخلفية
   const res = Local.startBreak(emp.id, emp.name, reason, graceSecFor(reason));
   if (!statusMap[emp.id]) statusMap[emp.id] = { closedMinutes: 0 };
-  statusMap[emp.id].openLog = { reason, outAt: res.outAt };
+  // لازم id هون: بدونه لو رجع الموظف للشاشة وضغط اسمه، بيوصل endBreak بـ id فاضي
+  // وبيفشل، فيضل "معلّق برا" للأبد.
+  statusMap[emp.id].openLog = { id: res.id, reason, outAt: res.outAt };
   renderOpenBreak(emp, { id: res.id, reason, outAt: res.outAt });
 }
 
@@ -427,6 +433,11 @@ function renderOpenBreak(emp, log) {
     bar.style.stroke = scaleColor(p);
     timeEl.textContent = mmss(elapsed);
     timeEl.classList.toggle("over", elapsed > maxMs);
+
+    // تجاوز الضِعف = على الأغلب نسي يسجّل عودته، فبنّبهه بوضوح بدل ما يضل العدّاد يزيد بصمت
+    if (elapsed > maxMs * 2) {
+      graceBox.innerHTML = `<span class="grace-note warn">نسيت تسجّل عودتك؟ اضغط "تسجيل العودة"</span>`;
+    }
 
     // مجموع اليوم بالملخص تحت بيزيد مع البريك الجاري
     const totalEl = document.getElementById("sumTotal");
