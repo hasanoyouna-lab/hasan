@@ -18,7 +18,9 @@ var SHEET_NAMES = {
 
 var SHEET_HEADERS = {
   Employees: ['id', 'name', 'active', 'sortOrder', 'updatedAt'],
-  Logs: ['id', 'employeeId', 'employeeName', 'reason', 'outAt', 'inAt', 'durationMin', 'status', 'overLimit', 'outOffline', 'inOffline', 'updatedAt'],
+  // ملاحظة: أي عمود جديد لازم ينضاف بآخر القائمة. لو انحشر بالنص، بيصير عدم تطابق
+  // بين العناوين والبيانات الموجودة أصلاً بالصفوف القديمة.
+  Logs: ['id', 'employeeId', 'employeeName', 'reason', 'outAt', 'inAt', 'durationMin', 'status', 'overLimit', 'outOffline', 'inOffline', 'updatedAt', 'adjusted'],
   Settings: ['key', 'value', 'updatedAt']
 };
 
@@ -93,6 +95,7 @@ function doGet(e) {
       case 'getReport': data = getReport(e.parameter.start, e.parameter.end); break;
       case 'getSettings': data = getSettings(); break;
       case 'runSetup': data = setupEverything(); break;
+      case 'repairDurations': data = repairNegativeDurations(); break;
       default: throw new Error('unknown action: ' + action);
     }
     return jsonOut({ ok: true, data: data });
@@ -114,6 +117,8 @@ function doPost(e) {
       case 'deleteEmployee': data = deleteEmployee(body.payload); break;
       case 'saveSettings': data = saveSettings(body.payload); break;
       case 'adminLogin': data = adminLogin(body.payload); break;
+      case 'adjustDuration': data = adjustDuration(body.payload); break;
+      case 'forceEndBreak': data = forceEndBreak(body.payload); break;
       default: throw new Error('unknown action: ' + body.action);
     }
     return jsonOut({ ok: true, data: data });
@@ -276,7 +281,7 @@ function getStatus() {
     if (day !== todayStr) return;
     if (!byEmployee[r.employeeId]) byEmployee[r.employeeId] = { closedMinutes: 0, openLog: null };
     if (r.status === 'closed') {
-      byEmployee[r.employeeId].closedMinutes += Number(r.durationMin) || 0;
+      byEmployee[r.employeeId].closedMinutes += Math.max(0, Number(r.durationMin) || 0);
     } else if (r.status === 'open') {
       byEmployee[r.employeeId].openLog = { id: r.id, reason: r.reason, outAt: r.outAt };
     }
@@ -329,7 +334,9 @@ function endBreak(p) {
   var inOffline = !!p.clientInAt;
   var outDate = new Date(row.outAt);
   var inDate = new Date(inAt);
-  var durationMin = Math.round((inDate.getTime() - outDate.getTime()) / 60000);
+  // outAt مؤجّل بمهلة الاحتساب، فلو رجع الموظف خلال المهلة بتطلع النتيجة سالبة.
+  // الصح إنها صفر: هو رجع قبل ما يبدأ الاحتساب أصلاً، مش إنه "وفّر" وقت من رصيده.
+  var durationMin = Math.max(0, Math.round((inDate.getTime() - outDate.getTime()) / 60000));
   var settings = getSettings();
   var maxMinutes = Number(settings.maxBreakMinutes) || 30;
   var overLimit = durationMin > maxMinutes;
@@ -340,6 +347,54 @@ function endBreak(p) {
     if (obj.hasOwnProperty(h)) r.sh.getRange(rowNum, c + 1).setValue(obj[h]);
   });
   return { id: p.id, inAt: inAt, durationMin: durationMin, overLimit: overLimit };
+}
+
+// تصحيح مدة بريك يدويًا من لوحة الإدارة. الحالة الشائعة: الموظف نسي يضغط "عودة"
+// فالعدّاد ضل شغال. بنعلّم السجل adjusted=true عشان يضل واضح بالتقرير إنه معدّل يدويًا.
+function adjustDuration(p) {
+  var r = readRows(SHEET_NAMES.LOGS);
+  var idx = -1;
+  for (var i = 0; i < r.rows.length; i++) { if (r.rows[i].id === p.id) { idx = i; break; } }
+  if (idx < 0) throw new Error('سجل غير موجود');
+
+  var mins = Math.max(0, Math.round(Number(p.durationMin)));
+  if (isNaN(mins)) throw new Error('مدة غير صالحة');
+
+  var row = r.rows[idx];
+  var maxMinutes = Number(getSettings().maxBreakMinutes) || 30;
+  var rowNum = idx + 2;
+  // نعيد حساب inAt من outAt + المدة الجديدة، حتى يضل السجل متماسك مع نفسه
+  var newInAt = addSecondsIso(row.outAt, mins * 60);
+  var obj = {
+    inAt: newInAt, durationMin: mins, status: 'closed',
+    overLimit: mins > maxMinutes, adjusted: true, updatedAt: nowIso()
+  };
+  r.headers.forEach(function (h, c) {
+    if (obj.hasOwnProperty(h)) r.sh.getRange(rowNum, c + 1).setValue(obj[h]);
+  });
+  return { id: p.id, durationMin: mins, overLimit: obj.overLimit };
+}
+
+// إنهاء بريك نسي صاحبه يسكّره، بمدة يحددها المدير
+function forceEndBreak(p) {
+  return adjustDuration(p);
+}
+
+// إصلاح لمرة وحدة للسجلات القديمة اللي انحفظت بمدة سالبة (عودة خلال مهلة الاحتساب)
+// قبل ما ينضاف الحد الأدنى بـ endBreak. آمن تشغيلها أكثر من مرة.
+function repairNegativeDurations() {
+  var r = readRows(SHEET_NAMES.LOGS);
+  var durCol = r.headers.indexOf('durationMin') + 1;
+  if (durCol < 1) return { fixed: 0 };
+  var fixed = 0;
+  for (var i = 0; i < r.rows.length; i++) {
+    var d = Number(r.rows[i].durationMin);
+    if (!isNaN(d) && d < 0) {
+      r.sh.getRange(i + 2, durCol).setValue(0);
+      fixed++;
+    }
+  }
+  return { fixed: fixed };
 }
 
 function getReport(start, end) {

@@ -117,13 +117,17 @@ async function renderReport(body, start, end) {
       const cls = l.status === "open" ? "open" : (isTrue(l.overLimit) ? "overlimit" : "");
       const outMark = isTrue(l.outOffline) ? " 📱" : "";
       const inMark = isTrue(l.inOffline) ? " 📱" : "";
+      const adjMark = isTrue(l.adjusted) ? ` <span title="معدّلة يدويًا">✎</span>` : "";
       return `<tr class="${cls}">
         <td>${l.employeeName}</td>
-        <td>${l.reason}</td>
+        <td><span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">
+          ${Icons.svg(l.reason, 16)}${l.reason}</span></td>
         <td>${new Date(l.outAt).toLocaleDateString("ar-EG")}</td>
         <td>${fmtTime(l.outAt)}${outMark}</td>
         <td>${l.status === "open" ? "لسا برا" : fmtTime(l.inAt) + inMark}</td>
-        <td>${l.status === "open" ? "-" : fmtDuration(l.durationMin)}</td>
+        <td>${l.status === "open" ? "-" : fmtDuration(l.durationMin)}${adjMark}</td>
+        <td><button class="btn secondary" style="padding:6px 12px;font-size:13px"
+              data-fix="${l.id}" data-cur="${l.status === "open" ? "" : l.durationMin}">تعديل</button></td>
       </tr>`;
     }).join("");
     body.innerHTML = `
@@ -136,15 +140,34 @@ async function renderReport(body, start, end) {
       </div>
       <div class="panel">
         <table>
-          <thead><tr><th>الموظف</th><th>السبب</th><th>التاريخ</th><th>الخروج</th><th>العودة</th><th>المدة</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="6" class="muted">ما في سجلات بهاي الفترة</td></tr>`}</tbody>
+          <thead><tr><th>الموظف</th><th>السبب</th><th>التاريخ</th><th>الخروج</th><th>العودة</th><th>المدة</th><th></th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="7" class="muted">ما في سجلات بهاي الفترة</td></tr>`}</tbody>
         </table>
-        <p class="muted" style="margin-top:10px; font-size:12px;">📱 = تسجيل تم بجهاز أوفلاين (ساعة الجهاز)، مو ساعة السيرفر</p>
+        <p class="muted" style="margin-top:10px; font-size:12px;">
+          📱 = تسجيل تم بجهاز بدون نت (ساعة الجهاز مش ساعة السيرفر) &nbsp;·&nbsp;
+          ✎ = المدة معدّلة يدويًا &nbsp;·&nbsp;
+          استخدم "تعديل" لو الموظف نسي يضغط عودة وضل العدّاد شغال
+        </p>
       </div>
     `;
     document.getElementById("filterBtn").onclick = () => {
       renderReport(body, document.getElementById("startDate").value, document.getElementById("endDate").value);
     };
+    body.querySelectorAll("[data-fix]").forEach(btn => btn.onclick = async () => {
+      const cur = btn.dataset.cur;
+      const val = prompt("المدة الصحيحة بالدقائق:", cur || "30");
+      if (val === null) return;
+      const mins = Number(val);
+      if (isNaN(mins) || mins < 0) { alert("رقم غير صالح"); return; }
+      btn.disabled = true;
+      try {
+        await Api.post("adjustDuration", { id: btn.dataset.fix, durationMin: mins });
+        renderReport(body, document.getElementById("startDate").value, document.getElementById("endDate").value);
+      } catch (e) {
+        alert("تعذّر التعديل: " + e.message);
+        btn.disabled = false;
+      }
+    });
   } catch (e) {
     body.innerHTML = `<p class="center muted">خطأ: ${e.message}</p>`;
   }
