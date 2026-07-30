@@ -36,47 +36,60 @@ const Local = (() => {
     return (crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
   }
 
+  // مستمعين بينتبهوا لما وقت بريك يتصحّح من السيرفر، حتى العدّاد المعروض يصحّح نفسه
+  const outAtListeners = [];
+  function onOutAtCorrected(fn) { outAtListeners.push(fn); }
+  function emitOutAtCorrected(id, outAt) { outAtListeners.forEach(fn => fn(id, outAt)); }
+
   // ==================== بدء بريك ====================
-  // يرجع {id, outAt, offline} فورًا (تفاؤلي)، ويحاول المزامنة الفعلية بالخلفية.
-  async function startBreak(employeeId, employeeName, reason) {
+  // بيرجع {id, outAt} فورًا وبشكل متزامن — بدون أي انتظار للشبكة. الموظف يشوف
+  // العدّاد شغال بنفس اللحظة، والمزامنة تصير بالخلفية. لو السيرفر رجّع وقت مختلف
+  // شوي (فرق أجزاء الثانية)، بننبّه الواجهة تصحّح العدّاد بهدوء.
+  function startBreak(employeeId, employeeName, reason, graceSec) {
     const id = newId();
-    const localOutAt = new Date(Date.now() + 45000).toISOString(); // +45 ثانية، للاستخدام لو صار أوفلاين
+    const delayMs = (typeof graceSec === "number" ? graceSec : 45) * 1000;
+    const localOutAt = new Date(Date.now() + delayMs).toISOString();
 
     const breaks = getBreaks();
     breaks[id] = { employeeId, employeeName, reason, outAt: localOutAt, inAt: null, needsSync: { start: true, end: false } };
     setBreaks(breaks);
 
-    try {
-      const res = await Api.post("startBreak", { id, employeeId, employeeName, reason });
-      breaks[id].outAt = res.outAt;
-      breaks[id].needsSync.start = false;
-      setBreaks(breaks);
-      return { id, outAt: res.outAt, offline: false };
-    } catch (e) {
-      enqueue(id, "start");
-      return { id, outAt: localOutAt, offline: true };
-    }
+    Api.post("startBreak", { id, employeeId, employeeName, reason })
+      .then(res => {
+        const b = getBreaks();
+        if (!b[id]) return;
+        b[id].outAt = res.outAt;
+        b[id].needsSync.start = false;
+        setBreaks(b);
+        if (res.outAt !== localOutAt) emitOutAtCorrected(id, res.outAt);
+      })
+      .catch(() => enqueue(id, "start"));
+
+    return { id, outAt: localOutAt };
   }
 
   // ==================== إنهاء بريك ====================
-  async function endBreak(id) {
+  // نفس الفكرة: بنحسب المدة محليًا ونرجّعها فورًا للعرض، والسيرفر بيضل هو
+  // المرجع الموثوق للوقت المحفوظ (ما بنبعتله وقتنا إلا لو كنا أوفلاين).
+  function endBreak(id, maxBreakMinutes) {
     const breaks = getBreaks();
     const rec = breaks[id];
     const localInAt = new Date().toISOString();
 
-    if (rec) { rec.inAt = localInAt; setBreaks(breaks); }
+    if (rec) { rec.inAt = localInAt; rec.needsSync.end = true; setBreaks(breaks); }
 
-    try {
-      const res = await Api.post("endBreak", { id });
-      if (rec) { rec.needsSync.end = false; maybeCleanup(id); }
-      return { id, inAt: res.inAt, durationMin: res.durationMin, overLimit: res.overLimit, offline: false };
-    } catch (e) {
-      if (rec) { rec.needsSync.end = true; setBreaks(breaks); }
-      enqueue(id, "end");
-      const outMs = rec ? new Date(rec.outAt).getTime() : Date.now();
-      const durationMin = Math.round((new Date(localInAt).getTime() - outMs) / 60000);
-      return { id, inAt: localInAt, durationMin, overLimit: false, offline: true };
-    }
+    const outMs = rec ? new Date(rec.outAt).getTime() : Date.now();
+    const durationMin = Math.max(0, Math.round((new Date(localInAt).getTime() - outMs) / 60000));
+    const limit = Number(maxBreakMinutes) || 30;
+
+    Api.post("endBreak", { id })
+      .then(() => {
+        const b = getBreaks();
+        if (b[id]) { b[id].needsSync.end = false; setBreaks(b); maybeCleanup(id); }
+      })
+      .catch(() => enqueue(id, "end"));
+
+    return { id, inAt: localInAt, durationMin, overLimit: durationMin > limit };
   }
 
   function enqueue(id, type) {
@@ -175,6 +188,6 @@ const Local = (() => {
   return {
     startBreak, endBreak, getOpenBreak, getAllLocalOpenBreaks,
     cacheSet, cacheGet, statusCacheSet, statusCacheGet,
-    flushQueue, pendingCount
+    flushQueue, pendingCount, onOutAtCorrected
   };
 })();

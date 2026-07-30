@@ -2,38 +2,38 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>تسجيل ومتابعة موظفين عبداللطيف جميل</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>تسجيل الدخول والخروج — فرع عبداللطيف جميل</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#F7DC4E" />
+<link rel="preload" href="assets/fonts/tajawal-800-ar.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="assets/fonts/tajawal-400-ar.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div class="watermark"></div>
+
   <div class="header">
     <div class="branch-label">فرع عبداللطيف جميل</div>
     <div class="header-row">
       <img class="header-logo" src="assets/logo.png" alt="Pro House" />
       <h1>تسجيل الدخول والخروج</h1>
     </div>
-    <div class="clock" id="clock">--:--:-- --</div>
+    <div class="clock" id="clock">--:--:--</div>
     <div class="date" id="dateLine"></div>
   </div>
 
-  <div class="container" id="app">
-    <p class="center muted">جاري التحميل...</p>
-  </div>
+  <div class="container" id="app"></div>
 
-  <a href="admin.html" style="position:fixed; bottom:10px; left:10px; color:#444; font-size:12px;">إدارة</a>
+  <a href="admin.html" class="admin-link">إدارة</a>
 
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/icons.js"></script>
   <script src="js/offline.js"></script>
   <script src="js/kiosk.js"></script>
   <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js");
-    }
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
   </script>
 </body>
 </html>

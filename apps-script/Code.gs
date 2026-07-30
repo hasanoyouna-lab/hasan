@@ -47,6 +47,7 @@ function setupEverything() {
 
   seedInitialDataIfEmpty();
   ensureDefaultSetting('dailyLimitMinutes', 60);
+  ensureDefaultSetting('breakStartDelaySec', BREAK_START_DELAY_SEC);
   return 'تم إعداد كل التبويبات بنجاح';
 }
 
@@ -161,6 +162,38 @@ function readRows(name) {
   return { sh: sh, headers: headers, rows: rows };
 }
 
+// نفس readRows بس بتقرأ آخر N صف فقط. تبويب Logs بينمو بلا حدود، والشاشة الرئيسية
+// بتسأل عن حالة اليوم كل ٢٠ ثانية — قراءة الشيت كامل كل مرة بتصير أبطأ وأبطأ مع الوقت.
+// السجلات مضافة بالترتيب الزمني، فآخر الصفوف دايماً هي الأحدث.
+function readRecentRows(name, count) {
+  var sh = sheet(name);
+  var lastRow = sh.getLastRow();
+  var lastCol = sh.getLastColumn();
+  var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (lastRow < 2) return { sh: sh, headers: headers, rows: [] };
+
+  var startRow = Math.max(2, lastRow - count + 1);
+  var values = sh.getRange(startRow, 1, lastRow - startRow + 1, lastCol).getValues();
+  var isoCols = ['outAt', 'inAt', 'updatedAt'].map(function (h) { return headers.indexOf(h); });
+  var rows = [];
+  for (var i = 0; i < values.length; i++) {
+    var row = {};
+    for (var c = 0; c < headers.length; c++) row[headers[c]] = values[i][c];
+    isoCols.forEach(function (c) { if (c >= 0) row[headers[c]] = normalizeIsoValue(row[headers[c]]); });
+    rows.push(row);
+  }
+  return { sh: sh, headers: headers, rows: rows };
+}
+
+// اليوم المحلي (توقيت الشيت) لسجل معيّن. مهم جداً: outAt مخزّن UTC، فقص أول ١٠ أحرف
+// منه مباشرة بينسب أي بريك بين منتصف الليل و٣ الصبح لليوم اللي قبله بالغلط.
+function localDayOf(iso, tz) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return Utilities.formatDate(d, tz || Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
 function appendRow(name, obj) {
   var sh = sheet(name);
   var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
@@ -219,14 +252,14 @@ function deleteEmployee(p) {
 // ==================== Breaks (Logs) ====================
 
 function getOpenLog(employeeId) {
-  var rows = readRows(SHEET_NAMES.LOGS).rows;
+  var rows = readRecentRows(SHEET_NAMES.LOGS, 500).rows;
   var open = rows.filter(function (r) { return r.employeeId === employeeId && r.status === 'open'; });
   return open.length ? open[open.length - 1] : null;
 }
 
 // كل الموظفين البرا حاليًا (بريك مفتوح)، تستخدم للوحة "مين برا الآن"
 function getOpenLogs() {
-  var rows = readRows(SHEET_NAMES.LOGS).rows;
+  var rows = readRecentRows(SHEET_NAMES.LOGS, 500).rows;
   return rows.filter(function (r) { return r.status === 'open'; })
     .sort(function (a, b) { return a.outAt < b.outAt ? -1 : 1; });
 }
@@ -234,11 +267,12 @@ function getOpenLogs() {
 // إجمالي دقائق البريكات المستخدمة اليوم لكل موظف (كل البريكات المقفولة + البريك المفتوح
 // الحالي إذا في)، يستخدم لميزان الحرارة بالواجهة (أخضر ← أحمر حسب الحد اليومي dailyLimitMinutes).
 function getStatus() {
-  var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  var rows = readRows(SHEET_NAMES.LOGS).rows;
+  var tz = Session.getScriptTimeZone();
+  var todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var rows = readRecentRows(SHEET_NAMES.LOGS, 500).rows;
   var byEmployee = {};
   rows.forEach(function (r) {
-    var day = r.outAt ? String(r.outAt).slice(0, 10) : '';
+    var day = localDayOf(r.outAt, tz);
     if (day !== todayStr) return;
     if (!byEmployee[r.employeeId]) byEmployee[r.employeeId] = { closedMinutes: 0, openLog: null };
     if (r.status === 'closed') {
@@ -250,10 +284,17 @@ function getStatus() {
   return byEmployee;
 }
 
-var BREAK_START_DELAY_SEC = 45;
+var BREAK_START_DELAY_SEC = 45; // احتياطي فقط؛ القيمة الفعلية من إعداد breakStartDelaySec
 
 function addSecondsIso(iso, secs) {
   return new Date(new Date(iso).getTime() + secs * 1000).toISOString();
+}
+
+// مصدر واحد للحقيقة: الواجهة بتقرأ نفس الإعداد عشان العدّاد اللي بيشوفه الموظف
+// يطابق تمامًا الوقت اللي بينحفظ بالسيرفر.
+function breakStartDelaySec() {
+  var v = Number(getSettings().breakStartDelaySec);
+  return isNaN(v) || v < 0 ? BREAK_START_DELAY_SEC : v;
 }
 
 // وقت الخروج المسجل يبلش بعد BREAK_START_DELAY_SEC ثانية من لحظة الضغط (قرار متفق عليه) —
@@ -265,7 +306,7 @@ function startBreak(p) {
 
   var id = p.id || Utilities.getUuid();
   var now = nowIso();
-  var outAt = p.clientOutAt ? p.clientOutAt : addSecondsIso(now, BREAK_START_DELAY_SEC);
+  var outAt = p.clientOutAt ? p.clientOutAt : addSecondsIso(now, breakStartDelaySec());
   var outOffline = !!p.clientOutAt;
   appendRow(SHEET_NAMES.LOGS, {
     id: id, employeeId: p.employeeId, employeeName: p.employeeName, reason: p.reason,
@@ -302,10 +343,11 @@ function endBreak(p) {
 }
 
 function getReport(start, end) {
+  var tz = Session.getScriptTimeZone();
   var rows = readRows(SHEET_NAMES.LOGS).rows;
   var filtered = rows.filter(function (r) {
-    var d = r.outAt ? r.outAt.slice(0, 10) : '';
-    return d >= start && d <= end;
+    var d = localDayOf(r.outAt, tz);
+    return d && d >= start && d <= end;
   });
   filtered.sort(function (a, b) { return a.outAt < b.outAt ? 1 : -1; });
   return filtered;

@@ -85,7 +85,8 @@ async function renderNow(body) {
         const cls = elapsed >= maxMinutes ? "overlimit" : "open";
         return `<tr class="${cls}">
           <td>${l.employeeName}</td>
-          <td>${l.reason}</td>
+          <td><span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">
+            ${Icons.svg(l.reason, 16)}${l.reason}</span></td>
           <td>${fmtTime(l.outAt)}</td>
           <td>${elapsed >= 0 ? elapsed + " د" : "-"}</td>
         </tr>`;
@@ -203,19 +204,32 @@ async function renderSettings(body) {
     const settings = await Api.get("getSettings");
     body.innerHTML = `
       <div class="panel">
-        <p>الحد الأقصى لوقت البريك (دقيقة)</p>
+        <p><b>الحد الأقصى للبريك الواحد</b> (دقيقة) — العدّاد بيصير أحمر لما يتجاوزه</p>
         <div class="row">
-          <input type="number" id="maxBreak" value="${settings.maxBreakMinutes || 30}" style="width:100px;" />
+          <input type="number" id="maxBreak" value="${settings.maxBreakMinutes || 30}" style="width:110px;" />
         </div>
-        <p style="margin-top:20px;">أسباب الخروج (افصل بينها بفاصلة ,)</p>
+
+        <p style="margin-top:22px;"><b>الحد اليومي لكل موظف</b> (دقيقة) — مجموع كل البريكات باليوم</p>
+        <div class="row">
+          <input type="number" id="dailyLimit" value="${settings.dailyLimitMinutes || 60}" style="width:110px;" />
+        </div>
+
+        <p style="margin-top:22px;"><b>مهلة قبل بدء الاحتساب</b> (ثانية) — الوقت المسموح للوصول</p>
+        <div class="row">
+          <input type="number" id="graceSec" value="${settings.breakStartDelaySec != null ? settings.breakStartDelaySec : 45}" style="width:110px;" />
+        </div>
+
+        <p style="margin-top:22px;"><b>أسباب الخروج</b> (افصل بينها بفاصلة ,)</p>
         <div class="row">
           <input type="text" id="reasons" value="${settings.reasons || ''}" style="width:100%;" />
         </div>
-        <p style="margin-top:20px;">كلمة سر الإدارة</p>
+
+        <p style="margin-top:22px;"><b>كلمة سر الإدارة</b></p>
         <div class="row">
-          <input type="text" id="adminPassword" value="${settings.adminPassword || ''}" style="width:160px;" />
+          <input type="text" id="adminPassword" value="${settings.adminPassword || ''}" style="width:170px;" />
         </div>
-        <div class="row" style="margin-top:20px;">
+
+        <div class="row" style="margin-top:24px;">
           <button class="btn" id="saveBtn">حفظ</button>
           <span id="savedMsg" class="muted" style="display:none;">تم الحفظ ✓</span>
         </div>
@@ -224,6 +238,8 @@ async function renderSettings(body) {
     document.getElementById("saveBtn").onclick = async () => {
       await Api.post("saveSettings", {
         maxBreakMinutes: Number(document.getElementById("maxBreak").value) || 30,
+        dailyLimitMinutes: Number(document.getElementById("dailyLimit").value) || 60,
+        breakStartDelaySec: Number(document.getElementById("graceSec").value) || 0,
         reasons: document.getElementById("reasons").value,
         adminPassword: document.getElementById("adminPassword").value
       });
