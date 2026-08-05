@@ -1,8 +1,8 @@
 // Service Worker: يخزّن هيكل التطبيق (HTML/CSS/JS/الخطوط) محلياً حتى يفتح بدون إنترنت نهائياً.
 // لا يتدخل أبداً بطلبات API_URL (Apps Script) — تلك تمر مباشرة للشبكة ويديرها js/api.js و js/offline.js.
 
-const CACHE_NAME = "attendance-shell-v13";
-const ASSET_V = "13"; // لازم يطابق ?v= المكتوب بملفات HTML
+const CACHE_NAME = "attendance-shell-v14";
+const ASSET_V = "14"; // لازم يطابق ?v= المكتوب بملفات HTML
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -48,8 +48,12 @@ self.addEventListener("fetch", (event) => {
   // للنسخة المخزّنة من نفس الملف بدل ما نطلع صفحة مكسورة أوفلاين.
   event.respondWith(
     fetch(req).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+      // منخزّن الردود الناجحة بس. على شبكة متقطعة أو بوابة واي فاي، الرد ممكن
+      // يكون صفحة خطأ — لو خزّناها بتضل تُقدَّم للمستخدم وبتكسر التطبيق أوفلاين.
+      if (res && res.ok && res.status === 200) {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+      }
       return res;
     }).catch(() =>
       caches.match(req).then((hit) => hit || caches.match(req, { ignoreSearch: true }))

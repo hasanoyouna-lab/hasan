@@ -24,7 +24,14 @@ const Api = (() => {
       body: JSON.stringify({ action, payload })
     });
     const json = await res.json();
-    if (!json.ok) throw new Error(json.error || "server error");
+    if (!json.ok) {
+      // وصلنا للسيرفر وهو رفض الطلب. هاد فشل دائم — إعادة المحاولة ما رح تنفع.
+      // منميّزه عن انقطاع النت (اللي بيرمي قبل ما نوصل لهون) لأن طابور المزامنة
+      // بيرمي الطلبات المرفوضة دائمًا، بينما لازم يضل يحاول للأبد لما يكون في انقطاع.
+      const err = new Error(json.error || "server error");
+      err.serverRejected = true;
+      throw err;
+    }
     return json.data;
   }
 
