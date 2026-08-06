@@ -176,13 +176,19 @@ async function renderReport(body, start, end) {
       const outMark = isTrue(l.outOffline) ? " 📱" : "";
       const inMark = isTrue(l.inOffline) ? " 📱" : "";
       const adjMark = isTrue(l.adjusted) ? ` <span title="معدّلة يدويًا">✎</span>` : "";
+      // وقت الخروج المعروض = لحظة الضغط الحقيقية. outAt مؤجّل بفترة السماح
+      // ومخصص للاحتساب، وعرضه كان بيطلع "عودة قبل خروج".
+      const realOut = l.tapOutAt || l.outAt;
+      const awayMin = l.status === "open" ? null
+        : Math.max(0, Math.round((new Date(l.inAt) - new Date(realOut)) / 60000));
       return `<tr class="${cls}">
         <td>${l.employeeName}</td>
         <td><span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">
           ${Icons.svg(l.reason, 16)}${l.reason}</span></td>
-        <td>${new Date(l.outAt).toLocaleDateString("ar-EG")}</td>
-        <td>${fmtTime(l.outAt)}${outMark}</td>
+        <td>${new Date(realOut).toLocaleDateString("ar-EG")}</td>
+        <td>${fmtTime(realOut)}${outMark}</td>
         <td>${l.status === "open" ? "لسا برا" : fmtTime(l.inAt) + inMark}</td>
+        <td>${awayMin === null ? "-" : fmtDuration(awayMin)}</td>
         <td>${l.status === "open" ? "-" : fmtDuration(l.durationMin)}${adjMark}</td>
         <td style="white-space:nowrap">
           <button class="btn secondary" style="padding:6px 11px;font-size:13px"
@@ -218,13 +224,15 @@ async function renderReport(body, start, end) {
       </div>
       <div class="panel">
         <table>
-          <thead><tr><th>الموظف</th><th>السبب</th><th>التاريخ</th><th>الخروج</th><th>العودة</th><th>المدة</th><th>إجراءات</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="7" class="muted">ما في سجلات بهاي الفترة</td></tr>`}</tbody>
+          <thead><tr><th>الموظف</th><th>السبب</th><th>التاريخ</th><th>الخروج</th><th>العودة</th><th>طلع فعليًا</th><th>محسوب عليه</th><th>إجراءات</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="8" class="muted">ما في سجلات بهاي الفترة</td></tr>`}</tbody>
         </table>
         <p class="muted" style="margin-top:10px; font-size:12px;">
+          <b>طلع فعليًا</b> = من ضغط الخروج لضغط العودة &nbsp;·&nbsp;
+          <b>محسوب عليه</b> = بعد خصم فترة السماح، وهو اللي بينضاف لمجموعه اليومي<br>
           📱 = تسجيل تم بجهاز بدون نت (ساعة الجهاز مش ساعة السيرفر) &nbsp;·&nbsp;
           ✎ = المدة معدّلة يدويًا &nbsp;·&nbsp;
-          استخدم "تعديل" لو الموظف نسي يضغط عودة وضل العدّاد شغال
+          "تعديل" لو الموظف نسي يضغط عودة وضل العدّاد شغال
         </p>
       </div>
     `;

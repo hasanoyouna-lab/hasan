@@ -20,7 +20,9 @@ var SHEET_HEADERS = {
   Employees: ['id', 'name', 'active', 'sortOrder', 'updatedAt'],
   // ملاحظة: أي عمود جديد لازم ينضاف بآخر القائمة. لو انحشر بالنص، بيصير عدم تطابق
   // بين العناوين والبيانات الموجودة أصلاً بالصفوف القديمة.
-  Logs: ['id', 'employeeId', 'employeeName', 'reason', 'outAt', 'inAt', 'durationMin', 'status', 'overLimit', 'outOffline', 'inOffline', 'updatedAt', 'adjusted'],
+  // outAt   = لحظة بداية احتساب الوقت (وقت الضغط + فترة السماح)
+  // tapOutAt = لحظة ضغط الموظف فعليًا، وهي الوقت الحقيقي اللي طلع فيه وبينعرض بالتقارير
+  Logs: ['id', 'employeeId', 'employeeName', 'reason', 'outAt', 'inAt', 'durationMin', 'status', 'overLimit', 'outOffline', 'inOffline', 'updatedAt', 'adjusted', 'tapOutAt'],
   Settings: ['key', 'value', 'updatedAt']
 };
 
@@ -97,6 +99,7 @@ function doGet(e) {
       case 'runSetup': data = setupEverything(); break;
       case 'repairDurations': data = repairNegativeDurations(); break;
       case 'repairDuplicates': data = repairDuplicateLogs(); break;
+      case 'repairTapTimes': data = repairTapTimes(); break;
       default: throw new Error('unknown action: ' + action);
     }
     return jsonOut({ ok: true, data: data });
@@ -159,7 +162,7 @@ function readRows(name) {
   var sh = sheet(name);
   var values = sh.getDataRange().getValues();
   var headers = values[0];
-  var isoCols = ['outAt', 'inAt', 'updatedAt'].map(function (h) { return headers.indexOf(h); });
+  var isoCols = ['outAt', 'inAt', 'updatedAt', 'tapOutAt'].map(function (h) { return headers.indexOf(h); });
   var rows = [];
   for (var i = 1; i < values.length; i++) {
     var row = {};
@@ -182,7 +185,7 @@ function readRecentRows(name, count) {
 
   var startRow = Math.max(2, lastRow - count + 1);
   var values = sh.getRange(startRow, 1, lastRow - startRow + 1, lastCol).getValues();
-  var isoCols = ['outAt', 'inAt', 'updatedAt'].map(function (h) { return headers.indexOf(h); });
+  var isoCols = ['outAt', 'inAt', 'updatedAt', 'tapOutAt'].map(function (h) { return headers.indexOf(h); });
   var rows = [];
   for (var i = 0; i < values.length; i++) {
     var row = {};
@@ -341,10 +344,13 @@ function startBreak(p) {
   var now = nowIso();
   var outAt = p.clientOutAt ? p.clientOutAt : addSecondsIso(now, graceSecFor(p.reason));
   var outOffline = !!p.clientOutAt;
+  // لحظة الضغط الحقيقية — هي اللي بتتعرض بالتقارير كوقت خروج، بينما outAt
+  // مؤجّل بفترة السماح ومخصص للاحتساب بس.
+  var tapOutAt = p.clientTapOutAt ? p.clientTapOutAt : now;
   appendRow(SHEET_NAMES.LOGS, {
     id: id, employeeId: p.employeeId, employeeName: p.employeeName, reason: p.reason,
     outAt: outAt, inAt: '', durationMin: '', status: 'open', overLimit: false,
-    outOffline: outOffline, inOffline: false, updatedAt: now
+    outOffline: outOffline, inOffline: false, updatedAt: now, tapOutAt: tapOutAt
   });
   return { id: id, outAt: outAt };
 }
@@ -429,7 +435,7 @@ function addManualLog(p) {
     id: id, employeeId: p.employeeId, employeeName: p.employeeName, reason: p.reason || 'غير محدد',
     outAt: outAt, inAt: inAt, durationMin: mins, status: 'closed',
     overLimit: mins > maxMinutes, outOffline: false, inOffline: false,
-    updatedAt: nowIso(), adjusted: true
+    updatedAt: nowIso(), adjusted: true, tapOutAt: outAt
   });
   return { id: id, outAt: outAt, durationMin: mins };
 }
@@ -445,6 +451,25 @@ function deleteLog(p) {
     }
   }
   return { deleted: 0, id: p.id };
+}
+
+// السجلات القديمة انحفظت قبل ما يوجد عمود tapOutAt، فوقت خروجها المعروض كان
+// وقت الضغط + فترة السماح (لهيك كانت تطلع عودة قبل خروج). بما إنه outAt = الضغط +
+// السماح بالضبط، بنقدر نستنتج وقت الضغط الحقيقي بطرح السماح. آمن للتكرار.
+function repairTapTimes() {
+  var r = readRows(SHEET_NAMES.LOGS);
+  var col = r.headers.indexOf('tapOutAt') + 1;
+  if (col < 1) return { fixed: 0 };
+  var settings = getSettings();
+  var fixed = 0;
+  for (var i = 0; i < r.rows.length; i++) {
+    var row = r.rows[i];
+    if (!row.outAt || row.tapOutAt) continue;
+    var grace = graceSecFor(row.reason, settings);
+    r.sh.getRange(i + 2, col).setValue(addSecondsIso(row.outAt, -grace));
+    fixed++;
+  }
+  return { fixed: fixed };
 }
 
 // تنظيف الصفوف المكررة اللي انعملت قبل ما يصير startBreak آمن للتكرار.

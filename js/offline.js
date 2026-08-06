@@ -48,10 +48,11 @@ const Local = (() => {
   function startBreak(employeeId, employeeName, reason, graceSec) {
     const id = newId();
     const delayMs = (typeof graceSec === "number" ? graceSec : 45) * 1000;
-    const localOutAt = new Date(Date.now() + delayMs).toISOString();
+    const tapOutAt = new Date().toISOString();                       // لحظة الضغط الحقيقية
+    const localOutAt = new Date(Date.now() + delayMs).toISOString(); // بداية الاحتساب
 
     const breaks = getBreaks();
-    breaks[id] = { employeeId, employeeName, reason, outAt: localOutAt, inAt: null, needsSync: { start: true, end: false } };
+    breaks[id] = { employeeId, employeeName, reason, outAt: localOutAt, tapOutAt, inAt: null, needsSync: { start: true, end: false } };
     setBreaks(breaks);
 
     Api.post("startBreak", { id, employeeId, employeeName, reason })
@@ -232,7 +233,10 @@ const Local = (() => {
         try {
           item.lastAttemptAt = Date.now();
           if (item.type === "start") {
-            await Api.post("startBreak", { id: item.id, employeeId: rec.employeeId, employeeName: rec.employeeName, reason: rec.reason, clientOutAt: rec.outAt });
+            await Api.post("startBreak", {
+              id: item.id, employeeId: rec.employeeId, employeeName: rec.employeeName,
+              reason: rec.reason, clientOutAt: rec.outAt, clientTapOutAt: rec.tapOutAt
+            });
             rec.needsSync.start = false;
           } else {
             await Api.post("endBreak", { id: item.id, clientInAt: rec.inAt });
