@@ -121,6 +121,7 @@ function doPost(e) {
       case 'adjustDuration': data = adjustDuration(body.payload); break;
       case 'forceEndBreak': data = forceEndBreak(body.payload); break;
       case 'deleteLog': data = deleteLog(body.payload); break;
+      case 'addManualLog': data = addManualLog(body.payload); break;
       default: throw new Error('unknown action: ' + body.action);
     }
     return jsonOut({ ok: true, data: data });
@@ -405,6 +406,32 @@ function adjustDuration(p) {
 // إنهاء بريك نسي صاحبه يسكّره، بمدة يحددها المدير
 function forceEndBreak(p) {
   return adjustDuration(p);
+}
+
+// إدخال بريك يدويًا من لوحة الإدارة. لاسترجاع بريكات صارت فعلاً بس ما وصلت الشيت
+// (جهاز كان بدون نت مثلاً). بينحفظ معلّم adjusted حتى يضل واضح إنه إدخال يدوي.
+// p: { employeeId, employeeName, reason, date 'yyyy-MM-dd', startTime 'HH:mm', durationMin }
+function addManualLog(p) {
+  var tz = Session.getScriptTimeZone();
+  var parts = String(p.startTime || '').split(':');
+  if (parts.length < 2) throw new Error('وقت غير صالح');
+  var stamp = p.date + ' ' + ('0' + parts[0]).slice(-2) + ':' + ('0' + parts[1]).slice(-2) + ':00';
+  var outDate = Utilities.parseDate(stamp, tz, 'yyyy-MM-dd HH:mm:ss');
+  if (!outDate || isNaN(outDate.getTime())) throw new Error('تاريخ أو وقت غير صالح');
+
+  var mins = Math.max(0, Math.round(Number(p.durationMin) || 0));
+  var outAt = outDate.toISOString();
+  var inAt = addSecondsIso(outAt, mins * 60);
+  var maxMinutes = Number(getSettings().maxBreakMinutes) || 30;
+  var id = Utilities.getUuid();
+
+  appendRow(SHEET_NAMES.LOGS, {
+    id: id, employeeId: p.employeeId, employeeName: p.employeeName, reason: p.reason || 'غير محدد',
+    outAt: outAt, inAt: inAt, durationMin: mins, status: 'closed',
+    overLimit: mins > maxMinutes, outOffline: false, inOffline: false,
+    updatedAt: nowIso(), adjusted: true
+  });
+  return { id: id, outAt: outAt, durationMin: mins };
 }
 
 // حذف سجل نهائيًا (سجلات تجربة أو إدخال غلط). حذف فعلي مش تعليم — السجل بيختفي

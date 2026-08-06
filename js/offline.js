@@ -85,7 +85,7 @@ const Local = (() => {
     Api.post("endBreak", { id })
       .then(() => {
         const b = getBreaks();
-        if (b[id]) { b[id].needsSync.end = false; setBreaks(b); maybeCleanup(id); }
+        if (b[id]) { b[id].needsSync.end = false; setBreaks(b); markSettled(id); }
       })
       .catch(() => enqueue(id, "end"));
 
@@ -101,13 +101,31 @@ const Local = (() => {
     scheduleFlush();
   }
 
-  function maybeCleanup(id) {
+  // السيرفر أكّد استلام البريك كامل. ما بنمسحه فورًا: بنعلّمه settled وبنخليه فترة
+  // قصيرة، لأن نسختنا من أرقام السيرفر ممكن تكون أقدم من التأكيد، ولو مسحناه هلق
+  // بيختفي من العداد لحد ما توصل الأرقام الجديدة — وهاد بيبيّن كأنه "تصفّر".
+  function markSettled(id) {
     const breaks = getBreaks();
     const rec = breaks[id];
     if (rec && !rec.needsSync.start && !rec.needsSync.end && rec.inAt) {
-      delete breaks[id];
+      rec.settled = true;
+      rec.settledAt = Date.now();
       setBreaks(breaks);
+      settledListeners.forEach(fn => fn(id));
     }
+  }
+
+  const settledListeners = [];
+  function onSettled(fn) { settledListeners.push(fn); }
+
+  // كنس السجلات المؤكدة بعد ما تصير أرقام السيرفر أكيد شاملة إلها
+  function sweepSettled() {
+    const breaks = getBreaks();
+    let changed = false;
+    Object.entries(breaks).forEach(([id, r]) => {
+      if (r.settled && Date.now() - (r.settledAt || 0) > 120000) { delete breaks[id]; changed = true; }
+    });
+    if (changed) setBreaks(breaks);
   }
 
   // ==================== الحالة المفتوحة لموظف معيّن (تدمج المحلي + السيرفر) ====================
@@ -136,6 +154,39 @@ const Local = (() => {
     return out;
   }
 
+  function minutesOf(r) {
+    return Math.max(0, Math.round((new Date(r.inAt).getTime() - new Date(r.outAt).getTime()) / 60000));
+  }
+
+  // البريكات اللي خلصت على هاد الجهاز ولسا السيرفر ما أكّد استلامها.
+  // أرقام السيرفر ما بتحتويها، فلازم تنضاف فوقها — بدون هيك أي بريك بيخلص
+  // والجهاز بدون نت بيختفي من العداد اليومي وكأنه ما صار.
+  // settled = السيرفر أكّد، فصار محسوب عنده وما بنعدّه مرتين.
+  function getLocalClosedMinutes() {
+    const breaks = getBreaks();
+    const out = {};
+    Object.values(breaks).forEach(r => {
+      if (!r.inAt || r.settled) return;
+      out[r.employeeId] = (out[r.employeeId] || 0) + minutesOf(r);
+    });
+    return out;
+  }
+
+  // نفس الشي مفصّل حسب السبب، عشان ملخص "وين قضى وقته" يضل صحيح بدون نت
+  function getLocalClosedByReason() {
+    const breaks = getBreaks();
+    const out = {};
+    Object.values(breaks).forEach(r => {
+      if (!r.inAt || r.settled) return;
+      const emp = out[r.employeeId] || (out[r.employeeId] = {});
+      const key = r.reason || "غير محدد";
+      const slot = emp[key] || (emp[key] = { mins: 0, count: 0 });
+      slot.mins += minutesOf(r);
+      slot.count += 1;
+    });
+    return out;
+  }
+
   // لو السيرفر أكّد استلام بداية البريك، وبعدها صار ما بيعرضه مفتوح (انقفل من جهاز
   // تاني أو من لوحة الإدارة)، معناها النسخة المحلية بايتة. بنمسحها حتى الموظف
   // ما يضل "معلّق برا" على هاد الجهاز للأبد.
@@ -154,10 +205,17 @@ const Local = (() => {
   }
 
   // ==================== المزامنة ====================
-  // بعد هالعدد من المحاولات الفاشلة بنعتبر العنصر ميؤوس منه ونرميه. بدون هاد، عنصر
-  // واحد مرفوض من السيرفر (مثلاً بريك انحذف) بيسدّ الطابور ويمنع كل البريكات
-  // اللي بعده من الوصول للشيت نهائيًا.
+  // قاعدة ثابتة: ما بننحذف بيانات بريك أبدًا بسبب فشل مزامنة. العنصر اللي السيرفر
+  // رفضه بينشال من الطابور حتى ما يسدّ باقي البريكات، بس سجله بينحفظ بقائمة
+  // att_failed عشان يضل قابل للمراجعة والاسترجاع بدل ما يضيع بصمت.
   const MAX_ATTEMPTS = 10;
+  const FAILED_KEY = "att_failed";
+  function parkFailed(id, rec, reason) {
+    const failed = readJson(FAILED_KEY, []);
+    failed.push({ id, rec, reason: String(reason || ""), at: Date.now() });
+    writeJson(FAILED_KEY, failed);
+  }
+  function getFailed() { return readJson(FAILED_KEY, []); }
   let flushing = false;
   async function flushQueue() {
     if (flushing) return;
@@ -183,7 +241,7 @@ const Local = (() => {
           setBreaks(breaks);
           q.shift();
           setQueue(q);
-          maybeCleanup(item.id);
+          markSettled(item.id);
         } catch (e) {
           // انقطاع نت = فشل مؤقت. ما بنعدّه ولا بنرمي شي أبدًا — بنوقف وبنعيد المحاولة
           // لاحقًا مهما طالت المدة. (رمي البيانات هون كان بيمسح بريكات الموظفين
@@ -197,6 +255,7 @@ const Local = (() => {
           item.attempts += 1;
           if (item.attempts >= MAX_ATTEMPTS) {
             const dead = getBreaks();
+            parkFailed(item.id, dead[item.id], e && e.message); // بينحفظ، ما بينحذف
             delete dead[item.id];
             setBreaks(dead);
             q.shift();
@@ -225,7 +284,9 @@ const Local = (() => {
 
   return {
     startBreak, endBreak, getOpenBreak, getAllLocalOpenBreaks,
+    getLocalClosedMinutes, getLocalClosedByReason,
     cacheSet, cacheGet, statusCacheSet, statusCacheGet,
-    flushQueue, pendingCount, onOutAtCorrected, reconcileWithServer
+    flushQueue, pendingCount, onOutAtCorrected, onSettled,
+    reconcileWithServer, sweepSettled, getFailed
   };
 })();

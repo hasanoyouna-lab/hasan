@@ -115,7 +115,9 @@ async function goHome() {
   if (cached && cached.employees && cached.employees.length) {
     employees = cached.employees;
     settings = cached.settings || {};
-    statusMap = Local.statusCacheGet() || statusMap || {};
+    // ما بنكتب فوق أرقام موجودة بالذاكرة بنسخة كاش أقدم منها — هيك كانت
+    // دقائق البريك اللي خلص للتو بتختفي وتبيّن كأن العداد صفّر.
+    if (!statusMap || !Object.keys(statusMap).length) statusMap = Local.statusCacheGet() || {};
     mergeLocalOpenBreaks();
     renderHome();
   } else {
@@ -150,24 +152,30 @@ async function refreshStatus() {
     statusMap = statusMap && Object.keys(statusMap).length ? statusMap : (Local.statusCacheGet() || {});
   }
   // التنظيف بس مع رد طازة من السيرفر — مش من كاش ممكن يكون قديم
-  if (fresh) Local.reconcileWithServer(statusMap);
+  if (fresh) { Local.reconcileWithServer(statusMap); Local.sweepSettled(); }
   mergeLocalOpenBreaks();
 }
 
-// أي بريك اتسجل من هاد الجهاز بيبين "برا" فورًا، حتى لو لسا ما وصل للسيرفر
+// أرقام السيرفر ما بتشمل البريكات اللي صارت على هاد الجهاز وما تزامنت بعد،
+// فبنجمعها فوقها. بنعيد حسابها مع كل رسم عشان تضل مطابقة للتخزين المحلي.
+let localClosed = {};
+let localClosedByReason = {};
+
 function mergeLocalOpenBreaks() {
   const locals = Local.getAllLocalOpenBreaks();
   Object.keys(locals).forEach(empId => {
     if (!statusMap[empId]) statusMap[empId] = { closedMinutes: 0 };
     statusMap[empId].openLog = locals[empId];
   });
+  localClosed = Local.getLocalClosedMinutes();
+  localClosedByReason = Local.getLocalClosedByReason();
 }
 
 function usedMinutes(empId) {
   const st = statusMap[empId];
-  if (!st) return 0;
-  let mins = Number(st.closedMinutes) || 0;
-  if (st.openLog) mins += Math.max(0, (Date.now() - new Date(st.openLog.outAt).getTime()) / 60000);
+  let mins = st ? (Number(st.closedMinutes) || 0) : 0;
+  mins += localClosed[empId] || 0;   // بريكات خلصت بدون نت ولسا ما وصلت السيرفر
+  if (st && st.openLog) mins += Math.max(0, (Date.now() - new Date(st.openLog.outAt).getTime()) / 60000);
   return mins;
 }
 
@@ -280,8 +288,19 @@ function timesPhrase(n) {
 // "وين قضى وقته اليوم" — مرتّب من الأطول للأقصر
 function daySummaryHtml(empId) {
   const st = statusMap[empId] || {};
-  const byReason = st.byReason || {};
   const limit = dailyLimitMin();
+
+  // أرقام السيرفر + البريكات اللي خلصت بدون نت ولسا ما تزامنت
+  const byReason = {};
+  Object.entries(st.byReason || {}).forEach(([k, v]) => {
+    byReason[k] = { mins: Number(v.mins) || 0, count: Number(v.count) || 0 };
+  });
+  Object.entries(localClosedByReason[empId] || {}).forEach(([k, v]) => {
+    const slot = byReason[k] || (byReason[k] = { mins: 0, count: 0 });
+    slot.mins += v.mins;
+    slot.count += v.count;
+  });
+
   const entries = Object.entries(byReason).sort((a, b) => b[1].mins - a[1].mins);
 
   if (!entries.length && !st.openLog) {
@@ -465,10 +484,11 @@ function endBreak(emp, log) {
   const res = Local.endBreak(log.id, maxBreakMin());
   currentBreak = null;
 
-  // تحديث فوري للحالة المحلية حتى الشاشة الرئيسية تبين صح لما نرجعلها
+  // الدقائق صارت محفوظة بالتخزين المحلي، و usedMinutes بتضمّها من هناك —
+  // فما بنزيدها هون كمان حتى ما تتحسب مرتين. بس بنشيل حالة "برا" فورًا.
   const st = statusMap[emp.id] || (statusMap[emp.id] = { closedMinutes: 0 });
-  st.closedMinutes = (Number(st.closedMinutes) || 0) + res.durationMin;
   delete st.openLog;
+  mergeLocalOpenBreaks();
 
   renderDone(emp, res);
 }

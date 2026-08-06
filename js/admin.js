@@ -192,12 +192,28 @@ async function renderReport(body, start, end) {
         </td>
       </tr>`;
     }).join("");
+    const empList = await Api.get("getEmployees");
+    const reasonList = ((await Api.get("getSettings")).reasons || "").split(",").map(s => s.trim()).filter(Boolean);
+
     body.innerHTML = `
       <div class="panel">
         <div class="row">
           من <input type="date" id="startDate" value="${start}" />
           إلى <input type="date" id="endDate" value="${end}" />
           <button class="btn" id="filterBtn">تصفية</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p style="margin-top:0"><b>إضافة بريك يدويًا</b> — لاسترجاع بريك صار فعلاً بس ما وصل النظام</p>
+        <div class="row">
+          <select id="mEmp">${empList.map(e => `<option value="${e.id}|${e.name}">${e.name}</option>`).join("")}</select>
+          <select id="mReason">${reasonList.map(r => `<option>${r}</option>`).join("")}</select>
+          <input type="date" id="mDate" value="${todayStr()}" />
+          <input type="time" id="mTime" value="12:00" />
+          <input type="number" id="mMins" min="0" value="10" style="width:90px" placeholder="دقائق" /> دقيقة
+          <button class="btn" id="mAdd">إضافة</button>
+          <span id="mMsg" class="muted" style="display:none">تمت الإضافة ✓</span>
         </div>
       </div>
       <div class="panel">
@@ -215,6 +231,30 @@ async function renderReport(body, start, end) {
     document.getElementById("filterBtn").onclick = () => {
       renderReport(body, document.getElementById("startDate").value, document.getElementById("endDate").value);
     };
+
+    document.getElementById("mAdd").onclick = async () => {
+      const btn = document.getElementById("mAdd");
+      const [employeeId, employeeName] = document.getElementById("mEmp").value.split("|");
+      const mins = Number(document.getElementById("mMins").value);
+      if (isNaN(mins) || mins < 0) { alert("عدد دقائق غير صالح"); return; }
+      btn.disabled = true;
+      try {
+        await Api.post("addManualLog", {
+          employeeId, employeeName,
+          reason: document.getElementById("mReason").value,
+          date: document.getElementById("mDate").value,
+          startTime: document.getElementById("mTime").value,
+          durationMin: mins
+        });
+        const msg = document.getElementById("mMsg");
+        msg.style.display = "inline";
+        setTimeout(() => renderReport(body, document.getElementById("startDate").value, document.getElementById("endDate").value), 700);
+      } catch (e) {
+        alert("تعذّرت الإضافة: " + e.message);
+        btn.disabled = false;
+      }
+    };
+
     body.querySelectorAll("[data-fix]").forEach(btn => btn.onclick = async () => {
       const cur = btn.dataset.cur;
       const val = prompt("المدة الصحيحة بالدقائق:", cur || "30");
